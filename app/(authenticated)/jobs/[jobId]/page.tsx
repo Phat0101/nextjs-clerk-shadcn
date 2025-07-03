@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { useQuery, useMutation } from "convex/react";
 import { api as convexApi } from "@/convex/_generated/api";
@@ -17,6 +17,8 @@ import { CheckCircle, AlertCircle, Loader2, FileText, Brain, Database } from "lu
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { useChat } from "@ai-sdk/react";
+import Markdown from "@/components/Markdown";
 
 interface SuggestedField {
     name: string;
@@ -38,7 +40,8 @@ interface AnalysisResult {
 type WorkflowStep = 'loading' | 'selecting' | 'analyzing' | 'confirming' | 'extracting' | 'reviewing' | 'completed';
 
 export default function JobWorkPage(props: any) {
-    const params = (props?.params ?? {}) as { jobId: string };
+    // Next.js 15: params is a Promise in client components – unwrap it
+    const params = React.use(props.params) as { jobId: string };
     const [currentStep, setCurrentStep] = useState<WorkflowStep>('loading');
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [confirmedFields, setConfirmedFields] = useState<SuggestedField[]>([]);
@@ -54,18 +57,42 @@ export default function JobWorkPage(props: any) {
     const [templateOptions, setTemplateOptions] = useState<any[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
-    // New state for creating custom fields
-    const [showAddHeader, setShowAddHeader] = useState(false);
-    const [showAddLine, setShowAddLine] = useState(false);
-    const [newHeaderField, setNewHeaderField] = useState<{ label: string; type: 'string' | 'number' | 'date'; description: string; required: boolean }>({ label: '', type: 'string', description: '', required: false });
-    const [newLineField, setNewLineField] = useState<{ label: string; type: 'string' | 'number' | 'date'; description: string; required: boolean }>({ label: '', type: 'string', description: '', required: false });
-
     const jobId = params.jobId as Id<"jobs">;
     const jobDetails = useQuery(convexApi.jobs.getDetails, { jobId });
     const completeJob = useMutation(convexApi.jobs.completeJob);
     const generateUploadUrl = useMutation(convexApi.jobs.generateUploadUrl);
     const updateStep = useMutation(convexApi.jobs.updateCompilerStep);
     const router = useRouter();
+
+    /* --------------------------------------------------
+       Chat with AI (Vercel AI SDK)
+    --------------------------------------------------*/
+    const selectedFileUrls = useMemo(() => {
+        if (!jobDetails) return [] as string[];
+        return selectedFileIndices
+            .map(i => jobDetails.files?.[i]?.fileUrl)
+            .filter(Boolean) as string[];
+    }, [jobDetails, selectedFileIndices]);
+
+    const {
+        messages: chatMessages,
+        input: chatInput,
+        handleInputChange: handleChatInputChange,
+        handleSubmit: originalHandleSubmit,
+    } = useChat({
+        api: "/api/job-chat",
+    });
+
+    const handleChatSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        originalHandleSubmit(e, { body: { fileUrls: selectedFileUrls } });
+    };
+
+    // New state for creating custom fields
+    const [showAddHeader, setShowAddHeader] = useState(false);
+    const [showAddLine, setShowAddLine] = useState(false);
+    const [newHeaderField, setNewHeaderField] = useState<{ label: string; type: 'string' | 'number' | 'date'; description: string; required: boolean }>({ label: '', type: 'string', description: '', required: false });
+    const [newLineField, setNewLineField] = useState<{ label: string; type: 'string' | 'number' | 'date'; description: string; required: boolean }>({ label: '', type: 'string', description: '', required: false });
 
     // Initialize workflow from saved job progress if available
     useEffect(() => {
@@ -140,7 +167,7 @@ export default function JobWorkPage(props: any) {
             const hasUrls = selectedFiles.every(file => file?.fileUrl);
             if (!hasUrls) throw new Error('File URLs not available for selected files');
 
-                const fileUrls = selectedFiles.map(file => file?.fileUrl).filter(Boolean);
+            const fileUrls = selectedFiles.map(file => file?.fileUrl).filter(Boolean);
 
             // 1. Call agent to attempt template match
             const agentRes = await fetch('/api/agent', {
@@ -537,13 +564,12 @@ export default function JobWorkPage(props: any) {
                         ].map((step, index) => (
                             <div key={step.key} className="flex items-center">
                                 <div
-                                    className={`flex items-center gap-1 ${
-                                        currentStep === step.key
+                                    className={`flex items-center gap-1 ${currentStep === step.key
                                             ? 'text-blue-600'
                                             : ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'].indexOf(currentStep) > index
-                                            ? 'text-green-600'
-                                            : 'text-gray-400'
-                                    }`}
+                                                ? 'text-green-600'
+                                                : 'text-gray-400'
+                                        }`}
                                 >
                                     {getStepIcon(step.key as WorkflowStep)}
                                     <span className="text-sm font-medium whitespace-nowrap">{step.label}</span>
@@ -606,64 +632,117 @@ export default function JobWorkPage(props: any) {
 
             {/* Main Content */}
             <ResizablePanelGroup direction="horizontal" className="flex-1">
-                <ResizablePanel defaultSize={50} minSize={30}>
-                <div className="h-full border-r overflow-hidden" style={{ minWidth: '300px' }}>
-                    <div className="p-4 border-b bg-gray-50">
-                        <div className="flex justify-between items-center">
-                            <h2 className="font-semibold">Source Document</h2>
+                {/* Chat & Progress Side Panel */}
+                <ResizablePanel defaultSize={20} minSize={15}>
+                    <div className="h-full flex flex-col border-r bg-white">
+                        {/* Progress (task list) */}
+                        <div className="p-4 border-b">
+                            <h3 className="font-semibold mb-2">Progress</h3>
+                            <div className="space-y-2">
+                                {[
+                                    { key: 'selecting', label: 'Select File' },
+                                    { key: 'analyzing', label: 'AI Analysis' },
+                                    { key: 'confirming', label: 'Confirm Fields' },
+                                    { key: 'extracting', label: 'Extract Data' },
+                                    { key: 'reviewing', label: 'Review & Edit' },
+                                    { key: 'completed', label: 'Complete' },
+                                ].map((step) => {
+                                    const completed =
+                                        ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'].indexOf(currentStep) >
+                                        ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'].indexOf(step.key);
+                                    const active = currentStep === step.key;
+                                    return (
+                                        <div key={step.key} className="flex items-center gap-2 text-sm">
+                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${active ? 'bg-blue-600 border-blue-600' : completed ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}> {active || completed ? <CheckCircle className="w-3 h-3 text-white" /> : null}</div>
+                                            <span className={active ? 'font-medium text-blue-600' : completed ? 'text-green-600' : 'text-gray-600'}>{step.label}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
 
-                            {/* File Selector */}
-                            {files.length > 1 && (
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm text-muted-foreground">Preview:</span>
-                                    <select
-                                        value={previewFileIndex}
-                                        onChange={(e) => setPreviewFileIndex(Number(e.target.value))}
-                                        className="text-sm border border-gray-300 rounded px-2 py-1 bg-white"
-                                    >
-                                        {files.map((file, index) => (
-                                            <option key={file._id} value={index}>
-                                                {file.fileName} ({Math.round((file.fileSize || 0) / 1024)}KB)
-                                            </option>
-                                        ))}
-                                    </select>
+                        {/* Chat Area */}
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            <div className="p-4 overflow-y-auto flex-1 space-y-3">
+                                {chatMessages.map((m) => (
+                                    <div key={m.id} className="space-y-1">
+                                        <div className="text-xs font-semibold text-gray-500">{m.role === 'user' ? 'You' : 'AI'}</div>
+                                        <Markdown content={m.content} />
+                                    </div>
+                                ))}
+                            </div>
+                            <form onSubmit={handleChatSubmit} className="p-3 border-t flex gap-2">
+                                <input
+                                    className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    placeholder="Ask AI..."
+                                    value={chatInput}
+                                    onChange={handleChatInputChange}
+                                />
+                                <Button type="submit" size="sm">Send</Button>
+                            </form>
+                        </div>
+                    </div>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+
+                {/* Document Preview */}
+                <ResizablePanel defaultSize={40} minSize={25}>
+                    <div className="h-full border-r overflow-hidden" style={{ minWidth: '300px' }}>
+                        <div className="p-4 border-b bg-gray-50">
+                            <div className="flex justify-between items-center">
+                                <h2 className="font-semibold">Source Document</h2>
+
+                                {/* File Selector */}
+                                {files.length > 1 && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-muted-foreground">Preview:</span>
+                                        <select
+                                            value={previewFileIndex}
+                                            onChange={(e) => setPreviewFileIndex(Number(e.target.value))}
+                                            className="text-sm border border-gray-300 rounded px-2 py-1 bg-white"
+                                        >
+                                            {files.map((file, index) => (
+                                                <option key={file._id} value={index}>
+                                                    {file.fileName} ({Math.round((file.fileSize || 0) / 1024)}KB)
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="h-full relative overflow-auto">
+                            {isFileViewerLoading && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10">
+                                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
                                 </div>
+                            )}
+
+                            {files[previewFileIndex]?.fileType?.startsWith('image') ? (
+                                <Image
+                                    src={files[previewFileIndex]?.fileUrl || '#'}
+                                    alt="preview"
+                                    className="max-w-full h-auto mx-auto"
+                                    onLoad={() => setIsFileViewerLoading(false)}
+                                    onError={() => setIsFileViewerLoading(false)}
+                                />
+                            ) : (
+                                <embed
+                                    src={`${files[previewFileIndex]?.fileUrl || ''}#toolbar=0&navpanes=0&scrollbar=0`}
+                                    type="application/pdf"
+                                    width="100%"
+                                    height="100%"
+                                    className="w-full h-full"
+                                    onLoad={() => setIsFileViewerLoading(false)}
+                                    onError={() => setIsFileViewerLoading(false)}
+                                />
                             )}
                         </div>
                     </div>
-                    <div className="h-full relative overflow-auto">
-                        {isFileViewerLoading && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10">
-                                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                            </div>
-                        )}
-
-                        {files[previewFileIndex]?.fileType?.startsWith('image') ? (
-                            <Image 
-                                src={files[previewFileIndex]?.fileUrl || '#'}
-                                alt="preview"
-                                className="max-w-full h-auto mx-auto"
-                                onLoad={() => setIsFileViewerLoading(false)}
-                                onError={() => setIsFileViewerLoading(false)}
-                            />
-                        ) : (
-                            <embed
-                                src={`${files[previewFileIndex]?.fileUrl || ''}#toolbar=0&navpanes=0&scrollbar=0`}
-                                type="application/pdf"
-                                width="100%"
-                                height="100%"
-                                className="w-full h-full"
-                                onLoad={() => setIsFileViewerLoading(false)}
-                                onError={() => setIsFileViewerLoading(false)}
-                            />
-                        )}
-                    </div>
-                </div>
                 </ResizablePanel>
                 <ResizableHandle withHandle />
-                <ResizablePanel defaultSize={50} minSize={20}>
-                <div className="h-full bg-gray-50 overflow-hidden flex flex-col" style={{ minWidth: '320px' }}>
-
+                {/* Existing Workflow Panel */}
+                <ResizablePanel defaultSize={40} minSize={20}>
                     {/* File Selection Step */}
                     {currentStep === 'selecting' && (
                         <div className="p-4">
@@ -721,10 +800,7 @@ export default function JobWorkPage(props: any) {
                                 </Button>
 
                                 <p className="text-xs text-center text-muted-foreground">
-                                    {selectedFileIndices.length === 0
-                                        ? 'No files selected'
-                                        : `Selected ${selectedFileIndices.length} of ${files.length} files`
-                                    }
+                                    selected {selectedFileIndices.length} of {files.length} files
                                 </p>
                             </div>
                         </div>
@@ -764,7 +840,7 @@ export default function JobWorkPage(props: any) {
                                         <SelectContent>
                                             {templateOptions.map(t => (
                                                 <SelectItem key={t.templateId} value={t.templateId}>
-                                                    {t.supplier}{t.clientName ? ` - ${t.clientName}` : ''} ({Math.round((t.score||0)*100)}%)
+                                                    {t.supplier}{t.clientName ? ` - ${t.clientName}` : ''} ({Math.round((t.score || 0) * 100)}%)
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -783,10 +859,10 @@ export default function JobWorkPage(props: any) {
                                                         <h4
                                                             contentEditable
                                                             suppressContentEditableWarning
-                                                            onBlur={(e)=>handleLabelChange(field.name, e.currentTarget.textContent || '')}
+                                                            onBlur={(e) => handleLabelChange(field.name, e.currentTarget.textContent || '')}
                                                             className="font-medium outline-none focus:ring-0 border border-transparent rounded px-1 hover:border-gray-300 focus:border-blue-500"
                                                         >
-                                                            {confirmedFields.find(f=>f.name===field.name)?.label || field.label}
+                                                            {confirmedFields.find(f => f.name === field.name)?.label || field.label}
                                                         </h4>
                                                         <Badge variant="outline" className="text-xs">
                                                             {field.type}
@@ -822,8 +898,8 @@ export default function JobWorkPage(props: any) {
                                 {/* Add Header Field form */}
                                 {showAddHeader ? (
                                     <div className="border rounded p-2 space-y-2 mb-3">
-                                        <Input placeholder="Field label" value={newHeaderField.label} onChange={(e)=>setNewHeaderField({...newHeaderField,label:e.target.value})} />
-                                        <Select value={newHeaderField.type} onValueChange={(val)=>setNewHeaderField({...newHeaderField,type:val as any})}>
+                                        <Input placeholder="Field label" value={newHeaderField.label} onChange={(e) => setNewHeaderField({ ...newHeaderField, label: e.target.value })} />
+                                        <Select value={newHeaderField.type} onValueChange={(val) => setNewHeaderField({ ...newHeaderField, type: val as any })}>
                                             <SelectTrigger className="w-full">
                                                 <SelectValue />
                                             </SelectTrigger>
@@ -833,17 +909,17 @@ export default function JobWorkPage(props: any) {
                                                 <SelectItem value="date">Date</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                        <Input placeholder="Description (optional)" value={newHeaderField.description} onChange={(e)=>setNewHeaderField({...newHeaderField,description:e.target.value})} />
+                                        <Input placeholder="Description (optional)" value={newHeaderField.description} onChange={(e) => setNewHeaderField({ ...newHeaderField, description: e.target.value })} />
                                         <label className="text-xs flex items-center gap-2">
-                                            <input type="checkbox" checked={newHeaderField.required} onChange={(e)=>setNewHeaderField({...newHeaderField,required:e.target.checked})} /> Required
+                                            <input type="checkbox" checked={newHeaderField.required} onChange={(e) => setNewHeaderField({ ...newHeaderField, required: e.target.checked })} /> Required
                                         </label>
                                         <div className="flex gap-2">
-                                            <Button size="sm" onClick={()=>addCustomField('header')}>Add</Button>
-                                            <Button size="sm" variant="outline" onClick={()=>setShowAddHeader(false)}>Cancel</Button>
+                                            <Button size="sm" onClick={() => addCustomField('header')}>Add</Button>
+                                            <Button size="sm" variant="outline" onClick={() => setShowAddHeader(false)}>Cancel</Button>
                                         </div>
                                     </div>
                                 ) : (
-                                    <Button variant="ghost" size="sm" onClick={()=>setShowAddHeader(true)}>+ Add Header Field</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => setShowAddHeader(true)}>+ Add Header Field</Button>
                                 )}
 
                                 <h4 className="text-base font-semibold mt-4 mb-1 border-t py-2">Invoice Line-Item Fields</h4>
@@ -853,13 +929,13 @@ export default function JobWorkPage(props: any) {
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2">
-                                                        <h4 
+                                                        <h4
                                                             contentEditable
                                                             suppressContentEditableWarning
-                                                            onBlur={(e)=>handleLabelChange(field.name, e.currentTarget.textContent || '')}
+                                                            onBlur={(e) => handleLabelChange(field.name, e.currentTarget.textContent || '')}
                                                             className="font-medium outline-none focus:ring-0 border border-transparent rounded px-1 hover:border-gray-300 focus:border-blue-500"
                                                         >
-                                                            {confirmedFields.find(f=>f.name===field.name)?.label || field.label}
+                                                            {confirmedFields.find(f => f.name === field.name)?.label || field.label}
                                                         </h4>
                                                         <Badge variant="outline" className="text-xs">
                                                             {field.type}
@@ -895,8 +971,8 @@ export default function JobWorkPage(props: any) {
                                 {/* Add Line-Item Field form */}
                                 {showAddLine ? (
                                     <div className="border rounded p-2 space-y-2 mb-3">
-                                        <Input placeholder="Field label" value={newLineField.label} onChange={(e)=>setNewLineField({...newLineField,label:e.target.value})} />
-                                        <Select value={newLineField.type} onValueChange={(val)=>setNewLineField({...newLineField,type:val as any})}>
+                                        <Input placeholder="Field label" value={newLineField.label} onChange={(e) => setNewLineField({ ...newLineField, label: e.target.value })} />
+                                        <Select value={newLineField.type} onValueChange={(val) => setNewLineField({ ...newLineField, type: val as any })}>
                                             <SelectTrigger className="w-full">
                                                 <SelectValue />
                                             </SelectTrigger>
@@ -906,17 +982,17 @@ export default function JobWorkPage(props: any) {
                                                 <SelectItem value="date">Date</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                        <Input placeholder="Description (optional)" value={newLineField.description} onChange={(e)=>setNewLineField({...newLineField,description:e.target.value})} />
+                                        <Input placeholder="Description (optional)" value={newLineField.description} onChange={(e) => setNewLineField({ ...newLineField, description: e.target.value })} />
                                         <label className="text-xs flex items-center gap-2">
-                                            <input type="checkbox" checked={newLineField.required} onChange={(e)=>setNewLineField({...newLineField,required:e.target.checked})} /> Required
+                                            <input type="checkbox" checked={newLineField.required} onChange={(e) => setNewLineField({ ...newLineField, required: e.target.checked })} /> Required
                                         </label>
                                         <div className="flex gap-2">
-                                            <Button size="sm" onClick={()=>addCustomField('line')}>Add</Button>
-                                            <Button size="sm" variant="outline" onClick={()=>setShowAddLine(false)}>Cancel</Button>
+                                            <Button size="sm" onClick={() => addCustomField('line')}>Add</Button>
+                                            <Button size="sm" variant="outline" onClick={() => setShowAddLine(false)}>Cancel</Button>
                                         </div>
                                     </div>
                                 ) : (
-                                    <Button variant="ghost" size="sm" onClick={()=>setShowAddLine(true)}>+ Add Line-Item Field</Button>
+                                    <Button variant="ghost" size="sm" onClick={() => setShowAddLine(true)}>+ Add Line-Item Field</Button>
                                 )}
                             </div>
 
@@ -1066,7 +1142,6 @@ export default function JobWorkPage(props: any) {
                             </div>
                         </div>
                     )}
-                </div>
                 </ResizablePanel>
             </ResizablePanelGroup>
         </div>
