@@ -28,16 +28,17 @@ export const getDashboardStats = query({
       const totalCost = completedJobs.reduce((sum, job) => sum + job.totalPrice, 0);
       const averageCost = completedJobs.length > 0 ? Math.round(totalCost / completedJobs.length) : 0;
       
-      // Calculate average completion time (in hours)
+      // Calculate average completion time (in hours) based on actual completion timestamp
       let averageCompletionTime = 0;
       if (completedJobs.length > 0) {
         const totalCompletionTime = completedJobs.reduce((sum, job) => {
-          // Calculate time from creation to completion (assuming completed jobs have completion timestamp)
-          // For now, we'll estimate based on deadline vs creation time as a proxy
-          const timeTaken = job.deadline - job._creationTime;
-          return sum + Math.abs(timeTaken);
+          if (job.completedAt) {
+            return sum + (job.completedAt - job._creationTime);
+          }
+          return sum;
         }, 0);
-        averageCompletionTime = Math.round(totalCompletionTime / (completedJobs.length * 60 * 60 * 1000)); // Convert to hours
+        const hours = totalCompletionTime / completedJobs.length / (1000 * 60 * 60);
+        averageCompletionTime = parseFloat(hours.toFixed(1)); // hours with 0.1 precision
       }
       
       return {

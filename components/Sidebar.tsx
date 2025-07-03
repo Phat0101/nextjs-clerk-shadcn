@@ -257,7 +257,7 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
             <div className="flex justify-between items-center">
               <span className="text-xs text-gray-600">Avg. Time</span>
               <span className="text-sm font-semibold text-orange-600">
-                {stats.averageCompletionTime || 0}h
+                {(stats.averageCompletionTime ?? 0).toFixed(1)}h
               </span>
             </div>
             {((stats.pendingJobs || 0) > 0 || (stats.inProgressJobs || 0) > 0) && (

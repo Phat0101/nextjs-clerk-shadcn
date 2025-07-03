@@ -93,7 +93,7 @@ export default function ClientView({ currentView, onViewChange }: ClientViewProp
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-orange-600">
-                  {stats.averageCompletionTime || 0}h
+                  {(stats.averageCompletionTime ?? 0).toFixed(1)}h
                 </div>
                 <p className="text-xs text-gray-500">To completion</p>
               </CardContent>
