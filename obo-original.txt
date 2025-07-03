@@ -1,0 +1,142 @@
+## Key Features
+
+- Multi-workspace support for different clients
+- Client-specific sidebar navigation with workspace switching
+- Ticket management with priority levels (urgent, high, medium, low)
+- Job management system with job-ticket linking and assignment tracking
+- SLA tracking with due dates
+- Real-time updates across all users
+- Role-based access control (admin, agent, viewer)
+- Time tracking functionality
+- Analytics dashboard
+- Notification system with popover interface
+- Status workflow: backlog → todo → in_progress → in_review → done → cancelled
+
+## Project Structure
+
+```
+/src/
+  ├── components/      # React components
+  │   ├── Analytics.tsx
+  │   ├── CreateJobModal.tsx
+  │   ├── CreateTicketModal.tsx
+  │   ├── CreateWorkspaceModal.tsx
+  │   ├── JobBoard.tsx
+  │   ├── JobCard.tsx
+  │   ├── JobDetail.tsx
+  │   ├── JobDetailModal.tsx
+  │   ├── NotificationPopover.tsx
+  │   ├── Sidebar.tsx
+  │   ├── TaskChecklist.tsx
+  │   ├── TicketBoard.tsx
+  │   ├── TicketCard.tsx
+  │   ├── TicketDetailModal.tsx
+  │   ├── UserDropdown.tsx
+  │   ├── WorkspaceList.tsx
+  │   ├── sidebar/     # Sidebar components
+  │   │   ├── ClientSection.tsx
+  │   │   ├── ClientSwitcher.tsx
+  │   │   └── PersonalSection.tsx
+  │   └── ui/          # shadcn/ui components
+  │       ├── button.tsx
+  │       ├── card.tsx
+  │       ├── checkbox.tsx
+  │       ├── dialog.tsx
+  │       ├── form.tsx
+  │       ├── input.tsx
+  │       ├── label.tsx
+  │       ├── popover.tsx
+  │       ├── select.tsx
+  │       └── textarea.tsx
+  ├── hooks/          # Custom React hooks
+  │   └── useTicketDetail.ts
+  ├── lib/            # Utility functions
+  ├── App.tsx         # Main app component
+  ├── SignInForm.tsx  # Authentication
+  ├── SignOutButton.tsx
+  └── TaskTracker.tsx # Core task management UI
+
+/convex/
+  ├── _generated/     # Auto-generated Convex files
+  ├── analytics.ts    # Analytics queries
+  ├── auth.ts        # Authentication logic
+  ├── jobs.ts        # Job CRUD operations
+  ├── tickets.ts     # Ticket CRUD operations
+  ├── workspaces.ts  # Workspace management
+  └── schema.ts      # Database schema
+```
+
+## Database Schema
+
+Key entities in Convex:
+
+- `users` - User accounts (from auth system)
+- `workspaces` - Client workspaces
+- `workspaceMembers` - User roles in workspaces
+- `jobs` - Job entities for organizing related tickets
+- `tickets` - Main ticket/task entities (includes jobId for job linking)
+- `ticketComments` - Activity and comments
+- `timeEntries` - Time tracking records
+
+## Development Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server (starts both Vite and Convex)
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+
+# Type checking
+npm run typecheck
+
+# Linting and type checking
+npm run lint
+```
+
+## Important Notes
+
+- The app uses Convex's reactive queries for real-time synchronization
+- All backend functions are in the `/convex` directory
+- Frontend components use Convex hooks for data fetching
+- The app is connected to Convex deployment: `expert-impala-248`
+- Uses Nextjs for the build system
+- Includes Chef development tools integration for screenshots
+
+## Common Tasks
+
+- To add a new ticket field: Update schema in `convex/schema.ts` and modify `tickets.ts`
+- To add a new job feature: Update `convex/jobs.ts` and relevant job components
+- To modify job-ticket relationships: Update schema and both `jobs.ts` and `tickets.ts`
+- To add a new workspace feature: Update `workspaces.ts` and `WorkspaceList.tsx`
+- To modify ticket workflow: Update status types in schema and `TicketBoard.tsx`
+- To add analytics: Add queries in `analytics.ts` and update `Analytics.tsx`
+
+## Code Conventions
+
+- Use TypeScript for all new code
+- Follow existing Tailwind CSS patterns for styling
+- Use shadcn/ui components from `/src/components/ui` for consistent UI primitives
+- NEVER use Radix, only use Base-UI together with shadcn
+- Use React Hook Form with Zod validation for form handling
+- Use Convex mutations for data updates
+- Use Convex queries for data fetching
+- Keep components in `/src/components`
+- Keep sidebar-related components in `/src/components/sidebar`
+- Keep custom React hooks in `/src/hooks`
+- Keep Convex backend logic in `/convex`
+- There are some Convex rules in `.claude/convex_rules.mdc`. Use it if you need to know about Convex.
+
+## General Rules
+
+- When doing anything with Convex or answering any questions the user asks regarding Convex, get additional context by running a search using a context7 MCP search to get the latest docs.
+- We must use Tailwind 4, Shadcn/ui, and Base UI (https://base-ui.com/react/components)
+- Never run `npm run dev`. The user will run it for you.
+- If you need UI guidance for any frontend styles, use the `docs/ui-guidelines.md` file.
+- Note we are in June 2025, not 2024 where your knowledge cutoff is.
