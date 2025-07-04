@@ -228,6 +228,10 @@ export const createJob = mutation({
       fileStorageId: v.string(),
       fileSize: v.optional(v.number()),
       fileType: v.optional(v.string()),
+      // Optional classification metadata – populated by the new split & classify pipeline
+      documentType: v.optional(v.string()),
+      pageNumbers: v.optional(v.array(v.number())),
+      isCoreDocument: v.optional(v.boolean()),
     }))
   },
   handler: async (ctx, { title, priceUnitId, deadlineHours, files }) => {
@@ -272,6 +276,9 @@ export const createJob = mutation({
         fileStorageId: file.fileStorageId,
         fileSize: file.fileSize,
         fileType: file.fileType,
+        documentType: file.documentType,
+        pageNumbers: file.pageNumbers,
+        isCoreDocument: file.isCoreDocument,
       });
     }
     
@@ -496,5 +503,40 @@ export const updateCompilerStep = mutation({
       ...(supplierName !== undefined ? { supplierName } : {}),
       ...(templateFound !== undefined ? { templateFound } : {}),
     });
+  },
+});
+
+// Append additional job files (used by classify pipeline)
+export const addJobFiles = mutation({
+  args: {
+    jobId: v.id("jobs"),
+    files: v.array(v.object({
+      fileName: v.string(),
+      fileStorageId: v.string(),
+      fileSize: v.optional(v.number()),
+      fileType: v.optional(v.string()),
+      documentType: v.optional(v.string()),
+      pageNumbers: v.optional(v.array(v.number())),
+      isCoreDocument: v.optional(v.boolean()),
+    })),
+  },
+  handler: async (ctx, { jobId, files }) => {
+    // Ensure job exists
+    const job = await ctx.db.get(jobId);
+    if (!job) throw new Error("Job not found");
+
+    // Insert each additional file
+    for (const f of files) {
+      await ctx.db.insert("jobFiles", {
+        jobId,
+        fileName: f.fileName,
+        fileStorageId: f.fileStorageId,
+        fileSize: f.fileSize,
+        fileType: f.fileType,
+        documentType: f.documentType,
+        pageNumbers: f.pageNumbers,
+        isCoreDocument: f.isCoreDocument,
+      });
+    }
   },
 }); 

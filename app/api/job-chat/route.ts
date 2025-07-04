@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     model: google('gemini-2.5-flash'),
     system: 'You are a helpful assistant for invoice extraction workflow. When relevant, reference the provided documents to answer questions or guide the user.',
     messages,
+    temperature: 0.5,
   });
 
   console.log(result.toDataStreamResponse());

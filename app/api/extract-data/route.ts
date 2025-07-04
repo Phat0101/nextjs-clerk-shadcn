@@ -195,7 +195,7 @@ ${totalFiles > 1 ? '- Process each document separately and keep the same order a
     }
 
     const { object: extractedData } = await generateObject({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-2.5-pro'),
       messages: [
         {
           role: 'user',
@@ -203,6 +203,7 @@ ${totalFiles > 1 ? '- Process each document separately and keep the same order a
         },
       ],
       schema: dynamicSchema as z.ZodTypeAny,
+      temperature: 0.0,
     });
 
     return NextResponse.json({

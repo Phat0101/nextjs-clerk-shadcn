@@ -70,6 +70,9 @@ export default defineSchema({
     fileStorageId: v.string(),
     fileSize: v.optional(v.number()),
     fileType: v.optional(v.string()),
+    documentType: v.optional(v.string()),
+    pageNumbers: v.optional(v.array(v.number())),
+    isCoreDocument: v.optional(v.boolean()),
   })
     .index("by_jobId", ["jobId"]),
 

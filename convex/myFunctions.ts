@@ -1,4 +1,5 @@
 import { query } from "./_generated/server";
+import { v } from "convex/values";
 
 // Get dashboard stats for different user types
 export const getDashboardStats = query({
@@ -145,5 +146,13 @@ export const getDashboardStats = query({
     }
     
     return { userRole: user.role };
+  },
+});
+
+// Utility: Resolve a public URL for a Convex storageId so that the frontend / server routes can download the file again
+export const getStorageUrl = query({
+  args: { storageId: v.string() },
+  handler: async (ctx, { storageId }) => {
+    return await ctx.storage.getUrl(storageId);
   },
 });

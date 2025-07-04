@@ -20,6 +20,7 @@ import type * as priceUnits from "../priceUnits.js";
 import type * as seedData from "../seedData.js";
 import type * as systemSettings from "../systemSettings.js";
 import type * as templates from "../templates.js";
+import type * as upload from "../upload.js";
 import type * as users from "../users.js";
 
 /**
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   seedData: typeof seedData;
   systemSettings: typeof systemSettings;
   templates: typeof templates;
+  upload: typeof upload;
   users: typeof users;
 }>;
 export declare const api: FilterApi<

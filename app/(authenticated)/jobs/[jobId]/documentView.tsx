@@ -14,17 +14,18 @@ interface FileItem {
 
 interface DocumentViewProps {
   files: FileItem[];
+  previewIndex: number;
+  onPreviewChange: (index: number) => void;
 }
 
-export default function DocumentView({ files }: DocumentViewProps) {
-  const [previewFileIndex, setPreviewFileIndex] = useState(0);
+export default function DocumentView({ files, previewIndex, onPreviewChange }: DocumentViewProps) {
   const [isFileViewerLoading, setIsFileViewerLoading] = useState(false);
 
   useEffect(() => {
     setIsFileViewerLoading(true);
-  }, [previewFileIndex]);
+  }, [previewIndex]);
 
-  const currentFile = files[previewFileIndex];
+  const currentFile = files[previewIndex];
 
   return (
     <div className="h-full border-r overflow-hidden" style={{ minWidth: "300px" }}>
@@ -36,8 +37,8 @@ export default function DocumentView({ files }: DocumentViewProps) {
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Preview:</span>
               <select
-                value={previewFileIndex}
-                onChange={(e) => setPreviewFileIndex(Number(e.target.value))}
+                value={previewIndex}
+                onChange={(e) => onPreviewChange(Number(e.target.value))}
                 className="text-sm border border-gray-300 rounded px-2 py-1 bg-white max-w-48"
               >
                 {files.map((file, index) => (

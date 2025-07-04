@@ -37,8 +37,8 @@ export default function CreateJobPage() {
   
   const priceUnits = useQuery(api.priceUnits.getActive);
   
-  const generateUploadUrl = useMutation(api.jobs.generateUploadUrl);
   const createJob = useMutation(api.jobs.createJob);
+  const generateUploadUrl = useMutation(api.jobs.generateUploadUrl);
   const router = useRouter();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,21 +66,12 @@ export default function CreateJobPage() {
     setIsUploading(true);
     
     try {
-      // Upload all files
-      const uploadedFiles = [];
-      
-      for (const file of files) {
-        // Step 1: Get a short-lived upload URL
-        const postUrl = await generateUploadUrl();
-        
-        // Step 2: POST the file to the URL
-        const result = await fetch(postUrl, {
-          method: "POST",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-        const { storageId } = await result.json();
-        
+      // Upload each original file to Convex storage
+      const uploadedFiles = [] as Array<{fileName:string;fileStorageId:string;fileSize:number;fileType:string}>;
+      for (const file of files){
+        const uploadUrl = await generateUploadUrl();
+        const resp = await fetch(uploadUrl,{method:'POST',headers:{'Content-Type':file.type},body:file});
+        const { storageId } = await resp.json();
         uploadedFiles.push({
           fileName: file.name,
           fileStorageId: storageId,
@@ -88,13 +79,13 @@ export default function CreateJobPage() {
           fileType: file.type,
         });
       }
-      
-      // Step 3: Create the job with all files
-      await createJob({ 
-        title, 
-        priceUnitId: selectedPriceUnitId as Id<"priceUnits">, 
+
+      // Create job with original files metadata
+      await createJob({
+        title,
+        priceUnitId: selectedPriceUnitId as Id<"priceUnits">,
         deadlineHours,
-        files: uploadedFiles 
+        files: uploadedFiles,
       });
       
       // Redirect to dashboard

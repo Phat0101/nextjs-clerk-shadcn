@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       schema: suggestedFieldsSchema,
+      temperature: 0.0,
     });
 
     return NextResponse.json({

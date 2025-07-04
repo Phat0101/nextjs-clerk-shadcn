@@ -39,6 +39,17 @@ interface AnalysisResult {
 
 type WorkflowStep = 'loading' | 'selecting' | 'analyzing' | 'confirming' | 'extracting' | 'reviewing' | 'completed';
 
+// Shared file type used across job views
+interface JobFile {
+    _id: string;
+    fileUrl?: string | null;
+    fileType?: string;
+    fileName: string;
+    documentType?: string | null;
+    pageNumbers?: number[] | number;
+    fileSize?: number;
+}
+
 export default function JobWorkPage(props: any) {
     // Next.js 15: params is a Promise in client components – unwrap it
     const params = React.use(props.params) as { jobId: string };
@@ -54,6 +65,9 @@ export default function JobWorkPage(props: any) {
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [templateOptions, setTemplateOptions] = useState<any[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+    // Preview index for DocumentView
+    const [previewFileIndex, setPreviewFileIndex] = useState(0);
+    const [isClassifying, setIsClassifying] = useState(false);
 
     // Tab selection for Confirm Fields UI (header vs line items)
     const [fieldsTab, setFieldsTab] = useState<'header' | 'line'>('header');
@@ -65,15 +79,19 @@ export default function JobWorkPage(props: any) {
     const updateStep = useMutation(convexApi.jobs.updateCompilerStep);
     const router = useRouter();
 
-    /* --------------------------------------------------
-       Chat with AI (Vercel AI SDK)
-    --------------------------------------------------*/
+    // Show classified files if they exist, otherwise originals
+    const displayFiles: JobFile[] = useMemo(() => {
+        if (!jobDetails) return [];
+        const classified = (jobDetails.files as JobFile[]).filter((f) => f.documentType);
+        return classified.length ? classified : (jobDetails.files as JobFile[]);
+    }, [jobDetails]);
+
     const selectedFileUrls = useMemo(() => {
         if (!jobDetails) return [] as string[];
         return selectedFileIndices
-            .map(i => jobDetails.files?.[i]?.fileUrl)
+            .map(i => displayFiles?.[i]?.fileUrl)
             .filter(Boolean) as string[];
-    }, [jobDetails, selectedFileIndices]);
+    }, [displayFiles, selectedFileIndices]);
 
     const {
         messages: chatMessages,
@@ -118,8 +136,7 @@ export default function JobWorkPage(props: any) {
     // Persist step and relevant data to backend when it changes (compiler only)
     useEffect(() => {
         if (!jobDetails) return;
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        updateStep({
+        void updateStep({
             jobId,
             step: currentStep,
             analysisResult: analysisResult ?? undefined,
@@ -128,19 +145,32 @@ export default function JobWorkPage(props: any) {
             supplierName: supplierName ?? undefined,
             templateFound: templateFound ?? undefined,
         });
-    }, [currentStep, analysisResult, confirmedFields, extractedData, supplierName, templateFound]);
+    }, [jobDetails, jobId, updateStep, currentStep, analysisResult, confirmedFields, extractedData, supplierName, templateFound]);
 
-    // Reset workflow when file selection changes (except during initial selection)
+    // Auto-select original indices update
     useEffect(() => {
-        if (jobDetails && currentStep !== 'loading' && currentStep !== 'selecting' && currentStep !== 'completed') {
-            // Reset workflow state and go back to selecting when file selection changes
-            setCurrentStep('selecting');
-            setAnalysisResult(null);
-            setConfirmedFields([]);
-            setExtractedData({});
-            setError(null);
+        if (!jobDetails) return;
+        if (currentStep === 'selecting' && selectedFileIndices.length === 0) {
+            const originalIndices = displayFiles.map((_ignored: unknown, i: number) => i);
+            setSelectedFileIndices(originalIndices);
         }
-    }, [selectedFileIndices]);
+    }, [jobDetails, currentStep, displayFiles]);
+
+    // After classify auto select grouped
+    useEffect(() => {
+        if (!jobDetails) return;
+        if (currentStep === 'selecting' && selectedFileIndices.length === 0) {
+            const groupedIdx = displayFiles.map((_ignored: unknown, i: number) => i);
+            if (groupedIdx.length) { setSelectedFileIndices(groupedIdx); }
+        }
+    }, [jobDetails, currentStep, displayFiles, selectedFileIndices.length]);
+
+    // Ensure previewFileIndex is always within bounds of displayFiles
+    useEffect(() => {
+        if (previewFileIndex >= displayFiles.length) {
+            setPreviewFileIndex(0);
+        }
+    }, [displayFiles, previewFileIndex]);
 
     const startAnalysis = async () => {
         if (selectedFileIndices.length === 0) {
@@ -687,30 +717,33 @@ export default function JobWorkPage(props: any) {
                     {/* File Selection Step */}
                     {currentStep === 'selecting' && (
                         <div className="p-4">
-                            <div className="mb-4">
+                            <div className="mb-4 flex-col">
                                 <h3 className="text-lg font-semibold">Select Files for Analysis</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    Choose which files you want to analyze and extract data from. You can select multiple files.
-                                </p>
+
                             </div>
+                            <p className="text-sm text-muted-foreground mb-2">
+                                Choose which files you want to analyze and extract data from. You can select multiple files.
+                            </p>
 
                             <div className="space-y-3 mb-6 max-h-96 overflow-y-auto">
-                                {files.map((file, index) => (
-                                    <Card key={file._id} className={`cursor-pointer transition-colors ${selectedFileIndices.includes(index) ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'
+                                {displayFiles.map((file: JobFile, index: number) => (
+                                    <Card key={file._id} className={`cursor-pointer transition-colors p-0 ${selectedFileIndices.includes(index) ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'
                                         }`} onClick={() => toggleFileSelection(index)}>
                                         <CardContent className="p-3">
                                             <div className="flex items-start justify-between">
-                                                <div className="flex-1">
+                                                <div className="flex flex-col">
                                                     <div className="flex items-center gap-2">
                                                         <FileText className="w-4 h-4 text-gray-600" />
-                                                        <h4 className="font-medium">{file.fileName}</h4>
+                                                        <h4 onClick={(e) => { e.stopPropagation(); setPreviewFileIndex(index); }} className="font-medium truncate max-w-xs cursor-pointer text-blue-700 hover:underline" title="View file">{file.fileName}</h4>
                                                     </div>
-                                                    <p className="text-sm text-muted-foreground mt-1">
-                                                        Size: {Math.round((file.fileSize || 0) / 1024)}KB
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        Type: {file.fileType || 'Unknown'}
-                                                    </p>
+                                                    {file.documentType && (
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Badge variant="secondary" className="text-xs truncate" title={file.documentType}>{file.documentType}</Badge>
+                                                            {file.pageNumbers && (
+                                                                <span className="text-xs text-muted-foreground">pages: {Array.isArray(file.pageNumbers) ? file.pageNumbers.join(',') : file.pageNumbers}</span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${selectedFileIndices.includes(index) ? 'bg-blue-600 border-blue-600' : 'border-gray-300'
                                                     }`}>
@@ -723,25 +756,58 @@ export default function JobWorkPage(props: any) {
                                     </Card>
                                 ))}
                             </div>
-
                             <div className="space-y-3">
-                                <Button
-                                    onClick={confirmFileSelection}
-                                    disabled={selectedFileIndices.length === 0 || isProcessing}
-                                    className="w-full"
-                                >
-                                    {isProcessing ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                            Starting Analysis...
-                                        </>
-                                    ) : (
-                                        `Analyze ${selectedFileIndices.length} Selected File${selectedFileIndices.length !== 1 ? 's' : ''}`
-                                    )}
-                                </Button>
+                                {/* Split & Classify button */}
+                                {(() => {
+                                    const anyClassified = jobDetails && jobDetails.files.some(f=>f.documentType);
+                                    if (anyClassified) return null; // hide once classified docs exist
+                                    if (isClassifying) return (
+                                        <div className="flex items-center gap-2 py-2"><Loader2 className="w-4 h-4 animate-spin"/><span className="text-sm">Classifying...</span></div>
+                                    );
+                                    return <Button className="w-full" disabled={isProcessing} onClick={async () => {
+                                        if (!jobDetails) return;
+                                        setIsProcessing(true);
+                                        setIsClassifying(true);
+                                        try {
+                                            const originalsToUse = selectedFileIndices.length
+                                                ? selectedFileIndices.filter(i => !jobDetails.files[i].documentType)
+                                                : jobDetails.files.map((_, i) => i).filter(i => !jobDetails.files[i].documentType);
+                                            const fileUrls = originalsToUse.map(i => jobDetails.files[i].fileUrl).filter(Boolean);
+                                            if (fileUrls.length === 0) { alert('Please select original files to split'); setIsProcessing(false); return; }
+                                            // Clear selection to wait for new files
+                                            setSelectedFileIndices([]);
+                                            await fetch('/api/classify', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ jobId: jobDetails.job._id, fileUrls })
+                                            });
+                                        } catch (err) { console.error(err); alert('Split & classify failed'); }
+                                        finally { setIsProcessing(false); setIsClassifying(false); }
+                                    }}>Split & Classify</Button>
+                                })()}
+
+                                {/* Analyze button */}
+                                {(() => {
+                                    const canAnalyze = selectedFileIndices.length > 0 && selectedFileIndices.every(i => displayFiles[i]?.documentType);
+                                    if (!canAnalyze) return null;
+                                    return <Button
+                                        onClick={confirmFileSelection}
+                                        disabled={isProcessing}
+                                        className="w-full"
+                                    >
+                                        {isProcessing ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                                Starting Analysis...
+                                            </>
+                                        ) : (
+                                            `Analyse ${selectedFileIndices.length} Selected File${selectedFileIndices.length !== 1 ? 's' : ''}`
+                                        )}
+                                    </Button>
+                                })()}
 
                                 <p className="text-xs text-center text-muted-foreground">
-                                    selected {selectedFileIndices.length} of {files.length} files
+                                    selected {selectedFileIndices.length} of {displayFiles.length} files
                                 </p>
                             </div>
                         </div>
@@ -766,7 +832,7 @@ export default function JobWorkPage(props: any) {
                             <div className="mb-2 flex items-center gap-2 flex-shrink-0">
                                 <h3 className="text-lg font-semibold">Confirm Fields to Extract</h3>
                                 <span
-                                    title={`AI detected a ${analysisResult.documentType} with ${analysisResult.confidence > 0.8 ? 'high' : 'moderate'} confidence. Select the fields you want to extract from ${selectedFileIndices.length} document${selectedFileIndices.length !== 1 ? 's' : ''}:`}
+                                    title={analysisResult.notes}
                                 >
                                     <Info className="w-4 h-4 text-muted-foreground cursor-help" />
                                 </span>
@@ -966,14 +1032,6 @@ export default function JobWorkPage(props: any) {
                                     Selected {confirmedFields.length} of {analysisResult.headerFields.length + analysisResult.lineItemFields.length} fields
                                 </p>
                             </div>
-
-                            {analysisResult.notes && (
-                                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded flex-shrink-0">
-                                    <p className="text-sm text-yellow-800">
-                                        <strong>AI Notes:</strong> {analysisResult.notes}
-                                    </p>
-                                </div>
-                            )}
                         </div>
                     )}
 
@@ -1082,7 +1140,8 @@ export default function JobWorkPage(props: any) {
                 <ResizableHandle withHandle />
                 {/* Document Preview */}
                 <ResizablePanel defaultSize={40} minSize={25}>
-                    <DocumentView files={files} />
+                    {/* Use filtered displayFiles so originals are hidden in preview selection */}
+                    <DocumentView files={displayFiles} previewIndex={previewFileIndex} onPreviewChange={setPreviewFileIndex} />
                 </ResizablePanel>
             </ResizablePanelGroup>
         </div>
