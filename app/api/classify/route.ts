@@ -226,14 +226,27 @@ export async function POST(req: NextRequest) {
 
     // If jobId provided, persist new grouped files via mutation
     if (jobId) {
-      const persistPayload = results.map(r=>({
-        fileName: `${r.documentType.replace(/\s+/g,'_')}-${Array.isArray(r.pageNumbers)?r.pageNumbers.join('-'):r.pageNumbers}.pdf`,
-        fileStorageId: r.storageId,
-        fileType: "application/pdf",
-        documentType: r.documentType,
-        pageNumbers: r.pageNumbers,
-        isCoreDocument: r.isCoreDocument,
-      }));
+      const persistPayload = results.map(r => {
+        let pageSegment: string;
+        if (Array.isArray(r.pageNumbers)) {
+          if (r.pageNumbers.length === 1) {
+            pageSegment = `${r.pageNumbers[0]}`;
+          } else {
+            pageSegment = `${r.pageNumbers[0]}-${r.pageNumbers[r.pageNumbers.length - 1]}`;
+          }
+        } else {
+          pageSegment = `${r.pageNumbers}`;
+        }
+
+        return {
+          fileName: `${r.documentType.replace(/\s+/g, '_')}-${pageSegment}.pdf`,
+          fileStorageId: r.storageId,
+          fileType: "application/pdf",
+          documentType: r.documentType,
+          pageNumbers: r.pageNumbers,
+          isCoreDocument: r.isCoreDocument,
+        };
+      });
       await fetchMutation(api.jobs.addJobFiles, { jobId: jobId as Id<"jobs">, files: persistPayload });
     }
 
