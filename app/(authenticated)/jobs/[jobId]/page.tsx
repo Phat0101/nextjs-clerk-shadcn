@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import TimeRemaining from "@/components/TimeRemaining";
-import { CheckCircle, AlertCircle, Loader2, FileText, Brain, Database, Info } from "lucide-react";
+import { CheckCircle, AlertCircle, Loader2, FileText, Info } from "lucide-react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -429,18 +429,6 @@ export default function JobWorkPage(props: any) {
         }
     };
 
-    const getStepIcon = (step: WorkflowStep) => {
-        switch (step) {
-            case 'selecting': return <FileText className="w-4 h-4" />;
-            case 'analyzing': return <Brain className="w-4 h-4" />;
-            case 'confirming': return <CheckCircle className="w-4 h-4" />;
-            case 'extracting': return <Database className="w-4 h-4" />;
-            case 'reviewing': return <FileText className="w-4 h-4" />;
-            case 'completed': return <CheckCircle className="w-4 h-4 text-green-600" />;
-            default: return <Loader2 className="w-4 h-4 animate-spin" />;
-        }
-    };
-
     const handleLabelChange = (fieldName: string, newLabel: string) => {
         setConfirmedFields(prev => prev.map(f => f.name === fieldName ? { ...f, label: newLabel } : f));
     };
@@ -556,86 +544,14 @@ export default function JobWorkPage(props: any) {
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="bg-white border-b p-4">
+            <div className="bg-white border-b p-1 px-2">
                 <div className="flex justify-between items-center gap-4">
-                    <h1 className="text-2xl font-bold">{job.title}</h1>
+                    <h1 className="text-xl font-bold">{job.title}</h1>
                     <TimeRemaining deadline={job.deadline} />
                 </div>
             </div>
 
-            {/* Progress Steps with navigation */}
-            <div className="bg-gray-50 border-b p-4">
-                <div className="flex items-center justify-between max-w-5xl mx-auto">
-                    {/* Back button */}
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentStep === 'selecting' || currentStep === 'loading'}
-                        onClick={() => {
-                            const order: WorkflowStep[] = ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'];
-                            const idx = order.indexOf(currentStep);
-                            if (idx > 0) setCurrentStep(order[idx - 1]);
-                        }}
-                    >
-                        ← Back
-                    </Button>
-
-                    {/* Steps display */}
-                    <div className="flex items-center overflow-x-auto px-2">
-                        {[
-                            { key: 'selecting', label: 'Select File' },
-                            { key: 'analyzing', label: 'AI Analysis' },
-                            { key: 'confirming', label: 'Confirm Fields' },
-                            { key: 'extracting', label: 'Extract Data' },
-                            { key: 'reviewing', label: 'Review & Edit' },
-                            { key: 'completed', label: 'Complete' },
-                        ].map((step, index) => (
-                            <div key={step.key} className="flex items-center">
-                                <div
-                                    className={`flex items-center gap-1 ${currentStep === step.key
-                                        ? 'text-blue-600'
-                                        : ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'].indexOf(currentStep) > index
-                                            ? 'text-green-600'
-                                            : 'text-gray-400'
-                                        }`}
-                                >
-                                    {getStepIcon(step.key as WorkflowStep)}
-                                    <span className="text-sm font-medium whitespace-nowrap">{step.label}</span>
-                                </div>
-                                {index < 5 && <div className={`w-8 h-0.5 mx-2 ${['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'].indexOf(currentStep) > index ? 'bg-green-600' : 'bg-gray-300'}`} />}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Next button */}
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentStep === 'completed' || currentStep === 'loading'}
-                        onClick={() => {
-                            if (isProcessing) return;
-                            switch (currentStep) {
-                                case 'selecting':
-                                    confirmFileSelection();
-                                    break;
-                                case 'confirming':
-                                    confirmFields();
-                                    break;
-                                case 'reviewing':
-                                    completeJobWithExtractedData();
-                                    break;
-                                default: {
-                                    const order: WorkflowStep[] = ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'];
-                                    const idx = order.indexOf(currentStep);
-                                    if (idx < order.length - 1) setCurrentStep(order[idx + 1]);
-                                }
-                            }
-                        }}
-                    >
-                        Next →
-                    </Button>
-                </div>
-            </div>
+            {/* Removed top-level progress bar – navigation moved to side panel */}
 
             {/* Error Display */}
             {error && (
@@ -686,6 +602,49 @@ export default function JobWorkPage(props: any) {
                                         </div>
                                     );
                                 })}
+                            </div>
+
+                            {/* Inline Back / Next controls */}
+                            <div className="flex justify-between mt-4">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={currentStep === 'selecting' || currentStep === 'loading'}
+                                    onClick={() => {
+                                        const order: WorkflowStep[] = ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'];
+                                        const idx = order.indexOf(currentStep);
+                                        if (idx > 0) setCurrentStep(order[idx - 1]);
+                                    }}
+                                >
+                                    ← Back
+                                </Button>
+
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={currentStep === 'completed' || currentStep === 'loading'}
+                                    onClick={() => {
+                                        if (isProcessing) return;
+                                        switch (currentStep) {
+                                            case 'selecting':
+                                                confirmFileSelection();
+                                                break;
+                                            case 'confirming':
+                                                confirmFields();
+                                                break;
+                                            case 'reviewing':
+                                                completeJobWithExtractedData();
+                                                break;
+                                            default: {
+                                                const order: WorkflowStep[] = ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'];
+                                                const idx = order.indexOf(currentStep);
+                                                if (idx < order.length - 1) setCurrentStep(order[idx + 1]);
+                                            }
+                                        }
+                                    }}
+                                >
+                                    Next →
+                                </Button>
                             </div>
                         </div>
 

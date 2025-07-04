@@ -70,10 +70,10 @@ export const getForClient = query({
       
     if (!user || !user.clientId) return [];
 
-    const jobs = await ctx.db
+    const jobs = (await ctx.db
       .query("jobs")
       .withIndex("by_clientId", (q) => q.eq("clientId", user.clientId!))
-      .collect();
+      .collect()).sort((a, b) => (b._creationTime ?? 0) - (a._creationTime ?? 0));
 
     // Add compiler information for jobs that have been assigned
     const jobsWithCompilerInfo = await Promise.all(
@@ -109,9 +109,9 @@ export const getAll = query({
       
     if (!user || user.role !== "ADMIN") return [];
 
-    const jobs = await ctx.db
+    const jobs = (await ctx.db
       .query("jobs")
-      .collect();
+      .collect()).sort((a, b) => (b._creationTime ?? 0) - (a._creationTime ?? 0));
 
     // Add compiler information for jobs that have been assigned
     const jobsWithCompilerInfo = await Promise.all(
