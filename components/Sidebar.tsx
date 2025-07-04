@@ -4,7 +4,6 @@ import React from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { UserButton } from "@clerk/nextjs";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -21,7 +20,8 @@ import {
   Plus,
   Briefcase,
   CheckSquare,
-  BarChart3
+  BarChart3,
+  SquarePen
 } from "lucide-react";
 
 interface SidebarProps {
@@ -34,7 +34,9 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
   const stats = useQuery(api.myFunctions.getDashboardStats);
   const ensureUser = useMutation(api.users.ensureUser);
   const updateRole = useMutation(api.users.updateRole);
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(true);
+  // Track whether the role select dropdown is open to avoid collapsing during interaction
+  const [selectOpen, setSelectOpen] = React.useState(false);
 
   // Ensure user exists on component mount
   React.useEffect(() => {
@@ -116,7 +118,7 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
           {
             id: "active-jobs",
             label: "Active Jobs", 
-            icon: CheckSquare,
+            icon: SquarePen,
             active: currentView === "active-jobs"
           },
           {
@@ -169,17 +171,20 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
   const navigationItems = getNavigationItems();
 
   return (
-    <div className={`bg-white border-r border-gray-200 h-screen flex flex-col transition-width duration-200 ${collapsed ? 'w-16' : 'w-64'}`}>
+    <div
+      className={`fixed top-0 left-0 bg-white border-r border-gray-200 h-screen flex flex-col transition-all duration-200 ${collapsed ? 'w-16' : 'w-64'}`}
+      onMouseEnter={() => setCollapsed(false)}
+      onMouseLeave={() => {
+        if (!selectOpen) setCollapsed(true);
+      }}
+    >
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 flex flex-col gap-3">
-        {/* Top row with logo & toggle */}
-        <div className={`flex items-center justify-between ${collapsed ? 'justify-center' : ''}`}>
+      <div className="p-4 border-gray-200 flex flex-col gap-3">
+        {/* Top row with logo only – sidebar expands via hover */}
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
           <div className={`w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center ${collapsed ? 'h-4 w-4 p-2 mr-1' : ''}`}>
             <span className="text-white font-bold text-sm">CF</span>
           </div>
-          <button onClick={() => setCollapsed(!collapsed)} className="text-gray-600 hover:text-gray-900">
-            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </button>
         </div>
 
         {!collapsed && (
@@ -194,7 +199,13 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
                   {currentUser.role}
                 </Badge>
               </div>
-              <Select value={currentUser.role} onValueChange={handleRoleChange}>
+              <Select
+                value={currentUser.role}
+                onValueChange={(val) => {
+                  handleRoleChange(val as "CLIENT" | "COMPILER" | "ADMIN");
+                }}
+                onOpenChange={(open: boolean) => setSelectOpen(open)}
+              >
                 <SelectTrigger className="w-full h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>

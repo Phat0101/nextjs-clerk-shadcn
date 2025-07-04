@@ -3,7 +3,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import Image from "next/image";
 import { useQuery, useMutation } from "convex/react";
 import { api as convexApi } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
@@ -13,12 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import TimeRemaining from "@/components/TimeRemaining";
-import { CheckCircle, AlertCircle, Loader2, FileText, Brain, Database } from "lucide-react";
+import { CheckCircle, AlertCircle, Loader2, FileText, Brain, Database, Info } from "lucide-react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@ai-sdk/react";
 import Markdown from "@/components/Markdown";
+import DocumentView from "./documentView";
 
 interface SuggestedField {
     name: string;
@@ -48,14 +48,15 @@ export default function JobWorkPage(props: any) {
     const [extractedData, setExtractedData] = useState<Record<string, string | number | null> | { documents: Record<string, string | number | null>[] }>({});
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [previewFileIndex, setPreviewFileIndex] = useState<number>(0);
     const [selectedFileIndices, setSelectedFileIndices] = useState<number[]>([]);
-    const [isFileViewerLoading, setIsFileViewerLoading] = useState(false);
     const [supplierName, setSupplierName] = useState<string | null>(null);
     const [templateFound, setTemplateFound] = useState<boolean>(false);
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [templateOptions, setTemplateOptions] = useState<any[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+    // Tab selection for Confirm Fields UI (header vs line items)
+    const [fieldsTab, setFieldsTab] = useState<'header' | 'line'>('header');
 
     const jobId = params.jobId as Id<"jobs">;
     const jobDetails = useQuery(convexApi.jobs.getDetails, { jobId });
@@ -141,11 +142,6 @@ export default function JobWorkPage(props: any) {
         }
     }, [selectedFileIndices]);
 
-    // Reset loading state when preview file changes
-    useEffect(() => {
-        setIsFileViewerLoading(true);
-    }, [previewFileIndex]);
-
     const startAnalysis = async () => {
         if (selectedFileIndices.length === 0) {
             setError("No files selected for analysis");
@@ -227,7 +223,17 @@ export default function JobWorkPage(props: any) {
     };
 
     const confirmFields = async () => {
-        if (selectedFileIndices.length === 0 || confirmedFields.length === 0) return;
+        // Check if no files are selected - redirect to file selection
+        if (selectedFileIndices.length === 0) {
+            setCurrentStep('selecting');
+            return;
+        }
+
+        // Check if no fields are confirmed
+        if (confirmedFields.length === 0) {
+            setError("Please select at least one field to extract");
+            return;
+        }
 
         const selectedFiles = selectedFileIndices.map(index => jobDetails?.files?.[index]).filter(Boolean);
 
@@ -521,17 +527,9 @@ export default function JobWorkPage(props: any) {
         <div className="flex flex-col h-full">
             {/* Header */}
             <div className="bg-white border-b p-4">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-2xl font-bold">{job.title}</h1>
-                        <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="secondary">AI Extraction</Badge>
-                            <TimeRemaining deadline={job.deadline} />
-                            <span className="text-sm text-muted-foreground">
-                                ${(job.totalPrice / 100).toFixed(2)}
-                            </span>
-                        </div>
-                    </div>
+                <div className="flex justify-between items-center gap-4">
+                    <h1 className="text-2xl font-bold">{job.title}</h1>
+                    <TimeRemaining deadline={job.deadline} />
                 </div>
             </div>
 
@@ -565,10 +563,10 @@ export default function JobWorkPage(props: any) {
                             <div key={step.key} className="flex items-center">
                                 <div
                                     className={`flex items-center gap-1 ${currentStep === step.key
-                                            ? 'text-blue-600'
-                                            : ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'].indexOf(currentStep) > index
-                                                ? 'text-green-600'
-                                                : 'text-gray-400'
+                                        ? 'text-blue-600'
+                                        : ['selecting', 'analyzing', 'confirming', 'extracting', 'reviewing', 'completed'].indexOf(currentStep) > index
+                                            ? 'text-green-600'
+                                            : 'text-gray-400'
                                         }`}
                                 >
                                     {getStepIcon(step.key as WorkflowStep)}
@@ -634,7 +632,7 @@ export default function JobWorkPage(props: any) {
             <ResizablePanelGroup direction="horizontal" className="flex-1">
                 {/* Chat & Progress Side Panel */}
                 <ResizablePanel defaultSize={20} minSize={15}>
-                    <div className="h-full flex flex-col border-r bg-white">
+                    <div className="h-full flex flex-col bg-white">
                         {/* Progress (task list) */}
                         <div className="p-4 border-b">
                             <h3 className="font-semibold mb-2">Progress</h3>
@@ -680,63 +678,6 @@ export default function JobWorkPage(props: any) {
                                 />
                                 <Button type="submit" size="sm">Send</Button>
                             </form>
-                        </div>
-                    </div>
-                </ResizablePanel>
-                <ResizableHandle withHandle />
-
-                {/* Document Preview */}
-                <ResizablePanel defaultSize={40} minSize={25}>
-                    <div className="h-full border-r overflow-hidden" style={{ minWidth: '300px' }}>
-                        <div className="p-4 border-b bg-gray-50">
-                            <div className="flex justify-between items-center">
-                                <h2 className="font-semibold">Source Document</h2>
-
-                                {/* File Selector */}
-                                {files.length > 1 && (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm text-muted-foreground">Preview:</span>
-                                        <select
-                                            value={previewFileIndex}
-                                            onChange={(e) => setPreviewFileIndex(Number(e.target.value))}
-                                            className="text-sm border border-gray-300 rounded px-2 py-1 bg-white"
-                                        >
-                                            {files.map((file, index) => (
-                                                <option key={file._id} value={index}>
-                                                    {file.fileName} ({Math.round((file.fileSize || 0) / 1024)}KB)
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div className="h-full relative overflow-auto">
-                            {isFileViewerLoading && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-white/70 z-10">
-                                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                                </div>
-                            )}
-
-                            {files[previewFileIndex]?.fileType?.startsWith('image') ? (
-                                <Image
-                                    src={files[previewFileIndex]?.fileUrl || '#'}
-                                    alt="preview"
-                                    className="max-w-full h-auto mx-auto"
-                                    onLoad={() => setIsFileViewerLoading(false)}
-                                    onError={() => setIsFileViewerLoading(false)}
-                                />
-                            ) : (
-                                <embed
-                                    src={`${files[previewFileIndex]?.fileUrl || ''}#toolbar=0&navpanes=0&scrollbar=0`}
-                                    type="application/pdf"
-                                    width="100%"
-                                    height="100%"
-                                    className="w-full h-full"
-                                    onLoad={() => setIsFileViewerLoading(false)}
-                                    onError={() => setIsFileViewerLoading(false)}
-                                />
-                            )}
                         </div>
                     </div>
                 </ResizablePanel>
@@ -821,18 +762,19 @@ export default function JobWorkPage(props: any) {
 
                     {/* Field Confirmation Step */}
                     {currentStep === 'confirming' && analysisResult && (
-                        <div className="p-4">
-                            <div className="mb-4">
+                        <div className="h-full flex flex-col p-4 py-2">
+                            <div className="mb-2 flex items-center gap-2 flex-shrink-0">
                                 <h3 className="text-lg font-semibold">Confirm Fields to Extract</h3>
-                                <p className="text-sm text-muted-foreground">
-                                    AI detected a <strong>{analysisResult.documentType}</strong> with {analysisResult.confidence > 0.8 ? 'high' : 'moderate'} confidence.
-                                    Select the fields you want to extract from {selectedFileIndices.length} document{selectedFileIndices.length !== 1 ? 's' : ''}:
-                                </p>
+                                <span
+                                    title={`AI detected a ${analysisResult.documentType} with ${analysisResult.confidence > 0.8 ? 'high' : 'moderate'} confidence. Select the fields you want to extract from ${selectedFileIndices.length} document${selectedFileIndices.length !== 1 ? 's' : ''}:`}
+                                >
+                                    <Info className="w-4 h-4 text-muted-foreground cursor-help" />
+                                </span>
                             </div>
 
                             {templateOptions.length > 0 && (
-                                <div className="mb-4">
-                                    <label className="text-sm font-medium mb-1 block">AI Template Suggestions</label>
+                                <div className="mb-2 flex-shrink-0">
+                                    <label className="text-sm font-medium mb-1 block">Template Suggestions</label>
                                     <Select value={selectedTemplateId || ''} onValueChange={handleTemplateSelect}>
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Choose a template" />
@@ -848,155 +790,148 @@ export default function JobWorkPage(props: any) {
                                 </div>
                             )}
 
-                            <div className="space-y-3 mb-6 max-h-[45vh] overflow-y-auto">
-                                <h4 className="text-base font-semibold mb-1">Invoice Header Fields</h4>
-                                {analysisResult.headerFields.map((field) => (
-                                    <Card key={field.name} className={`transition-colors p-0 mr-2 ${confirmedFields.find(f => f.name === field.name) ? 'border-gray-200 bg-white' : 'hover:bg-gray-50'}`}>
-                                        <CardContent className="p-2">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <h4
-                                                            contentEditable
-                                                            suppressContentEditableWarning
-                                                            onBlur={(e) => handleLabelChange(field.name, e.currentTarget.textContent || '')}
-                                                            className="font-medium outline-none focus:ring-0 border border-transparent rounded px-1 hover:border-gray-300 focus:border-blue-500"
-                                                        >
-                                                            {confirmedFields.find(f => f.name === field.name)?.label || field.label}
-                                                        </h4>
-                                                        <Badge variant="outline" className="text-xs">
-                                                            {field.type}
-                                                        </Badge>
-                                                        {field.required && (
-                                                            <Badge variant="secondary" className="text-xs">
-                                                                Required
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-sm text-muted-foreground mt-1">
-                                                        {field.description}
-                                                    </p>
-                                                    {field.example && (
-                                                        <p className="text-xs text-muted-foreground mt-1">
-                                                            Example: {field.example}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <div
-                                                    onClick={() => handleFieldToggle(field.name)}
-                                                    className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer ${confirmedFields.find(f => f.name === field.name) ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}
-                                                >
-                                                    {confirmedFields.find(f => f.name === field.name) && (
-                                                        <CheckCircle className="w-3 h-3 text-white" />
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
+                            <div className="mb-3 border-b flex gap-4 text-sm font-medium flex-shrink-0">
+                                <button
+                                    className={`pb-2 ${fieldsTab === 'header' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}
+                                    onClick={() => setFieldsTab('header')}
+                                >
+                                    Invoice Header Fields
+                                </button>
+                                <button
+                                    className={`pb-2 ${fieldsTab === 'line' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}
+                                    onClick={() => setFieldsTab('line')}
+                                >
+                                    Line Item Fields
+                                </button>
+                            </div>
 
-                                {/* Add Header Field form */}
-                                {showAddHeader ? (
-                                    <div className="border rounded p-2 space-y-2 mb-3">
-                                        <Input placeholder="Field label" value={newHeaderField.label} onChange={(e) => setNewHeaderField({ ...newHeaderField, label: e.target.value })} />
-                                        <Select value={newHeaderField.type} onValueChange={(val) => setNewHeaderField({ ...newHeaderField, type: val as any })}>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="string">String</SelectItem>
-                                                <SelectItem value="number">Number</SelectItem>
-                                                <SelectItem value="date">Date</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <Input placeholder="Description (optional)" value={newHeaderField.description} onChange={(e) => setNewHeaderField({ ...newHeaderField, description: e.target.value })} />
-                                        <label className="text-xs flex items-center gap-2">
-                                            <input type="checkbox" checked={newHeaderField.required} onChange={(e) => setNewHeaderField({ ...newHeaderField, required: e.target.checked })} /> Required
-                                        </label>
-                                        <div className="flex gap-2">
-                                            <Button size="sm" onClick={() => addCustomField('header')}>Add</Button>
-                                            <Button size="sm" variant="outline" onClick={() => setShowAddHeader(false)}>Cancel</Button>
-                                        </div>
+                            {/* Table container - takes remaining space */}
+                            <div className="flex-1 min-h-0 mb-3">
+                                <div className="h-full border rounded overflow-hidden">
+                                    <table className="w-full text-sm table-fixed">
+                                        <thead className="bg-gray-50 sticky top-0 z-10">
+                                            <tr className="text-left">
+                                                <th className="w-12 p-2 border-b text-center">✓</th>
+                                                <th className="w-40 p-2 border-b">Label</th>
+                                                <th className="w-20 p-2 border-b">Type</th>
+                                                <th className="w-20 p-2 border-b">Required</th>
+                                                <th className="p-2 border-b">Description</th>
+                                            </tr>
+                                        </thead>
+                                    </table>
+                                    <div className="h-full overflow-y-auto">
+                                        <table className="w-full text-sm table-fixed">
+                                            <tbody>
+                                                {(fieldsTab === 'header' ? analysisResult.headerFields : analysisResult.lineItemFields).map((field) => {
+                                                    const selected = confirmedFields.some(f => f.name === field.name);
+                                                    const fieldLabel = confirmedFields.find(f => f.name === field.name)?.label || field.label;
+                                                    return (
+                                                        <tr key={field.name} className={selected ? 'bg-gray-50' : 'hover:bg-gray-25'}>
+                                                            <td className="w-12 p-2 border-b align-top text-center">
+                                                                <div
+                                                                    onClick={() => handleFieldToggle(field.name)}
+                                                                    className={`w-4 h-4 rounded border-2 mt-1 flex items-center justify-center cursor-pointer mx-auto ${selected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}
+                                                                >
+                                                                    {selected && <CheckCircle className="w-3 h-3 text-white" />}
+                                                                </div>
+                                                            </td>
+                                                            <td className="w-40 p-2 border-b align-top">
+                                                                <div
+                                                                    contentEditable
+                                                                    suppressContentEditableWarning
+                                                                    onBlur={(e) => handleLabelChange(field.name, e.currentTarget.textContent || '')}
+                                                                    className="font-medium outline-none focus:ring-0 border border-transparent rounded px-1 hover:border-gray-300 focus:border-blue-500 truncate"
+                                                                    title={fieldLabel}
+                                                                >
+                                                                    {fieldLabel}
+                                                                </div>
+                                                            </td>
+                                                            <td className="w-20 p-2 border-b align-top">
+                                                                <Badge variant="outline" className="text-xs truncate" title={field.type}>
+                                                                    {field.type == "string" ? "Text" : field.type == "number" ? "Number" : field.type == "date" ? "Date" : field.type}
+                                                                </Badge>
+                                                            </td>
+                                                            <td className="w-20 p-2 border-b align-top text-center">
+                                                                {field.required && (
+                                                                    <p className="font-bold">✓</p>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-2 border-b align-top">
+                                                                <div
+                                                                    className="text-xs text-muted-foreground truncate cursor-help"
+                                                                    title={field.description}
+                                                                >
+                                                                    {field.description}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
-                                ) : (
-                                    <Button variant="ghost" size="sm" onClick={() => setShowAddHeader(true)}>+ Add Header Field</Button>
-                                )}
+                                </div>
+                            </div>
 
-                                <h4 className="text-base font-semibold mt-4 mb-1 border-t py-2">Invoice Line-Item Fields</h4>
-                                {analysisResult.lineItemFields.map((field) => (
-                                    <Card key={field.name} className={`transition-colors p-0 mr-2 ${confirmedFields.find(f => f.name === field.name) ? 'border-gray-200 bg-white' : 'hover:bg-gray-50'}`}>
-                                        <CardContent className="p-2">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <h4
-                                                            contentEditable
-                                                            suppressContentEditableWarning
-                                                            onBlur={(e) => handleLabelChange(field.name, e.currentTarget.textContent || '')}
-                                                            className="font-medium outline-none focus:ring-0 border border-transparent rounded px-1 hover:border-gray-300 focus:border-blue-500"
-                                                        >
-                                                            {confirmedFields.find(f => f.name === field.name)?.label || field.label}
-                                                        </h4>
-                                                        <Badge variant="outline" className="text-xs">
-                                                            {field.type}
-                                                        </Badge>
-                                                        {field.required && (
-                                                            <Badge variant="secondary" className="text-xs">
-                                                                Required
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-sm text-muted-foreground mt-1">
-                                                        {field.description}
-                                                    </p>
-                                                    {field.example && (
-                                                        <p className="text-xs text-muted-foreground mt-1">
-                                                            Example: {field.example}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <div
-                                                    onClick={() => handleFieldToggle(field.name)}
-                                                    className={`w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer ${confirmedFields.find(f => f.name === field.name) ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}
-                                                >
-                                                    {confirmedFields.find(f => f.name === field.name) && (
-                                                        <CheckCircle className="w-3 h-3 text-white" />
-                                                    )}
-                                                </div>
+                            {/* Add Field Buttons / Forms - fixed at bottom */}
+                            <div className="flex-shrink-0 mb-3">
+                                {fieldsTab === 'header' ? (
+                                    showAddHeader ? (
+                                        <div className="border rounded p-2 space-y-2">
+                                            <Input placeholder="Field label" value={newHeaderField.label} onChange={(e) => setNewHeaderField({ ...newHeaderField, label: e.target.value })} />
+                                            <Select value={newHeaderField.type} onValueChange={(val) => setNewHeaderField({ ...newHeaderField, type: val as any })}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="string">String</SelectItem>
+                                                    <SelectItem value="number">Number</SelectItem>
+                                                    <SelectItem value="date">Date</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <Input placeholder="Description (optional)" value={newHeaderField.description} onChange={(e) => setNewHeaderField({ ...newHeaderField, description: e.target.value })} />
+                                            <label className="text-xs flex items-center gap-2">
+                                                <input type="checkbox" checked={newHeaderField.required} onChange={(e) => setNewHeaderField({ ...newHeaderField, required: e.target.checked })} /> Required
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <Button size="sm" onClick={() => addCustomField('header')}>Add</Button>
+                                                <Button size="sm" variant="outline" onClick={() => setShowAddHeader(false)}>Cancel</Button>
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-
-                                {/* Add Line-Item Field form */}
-                                {showAddLine ? (
-                                    <div className="border rounded p-2 space-y-2 mb-3">
-                                        <Input placeholder="Field label" value={newLineField.label} onChange={(e) => setNewLineField({ ...newLineField, label: e.target.value })} />
-                                        <Select value={newLineField.type} onValueChange={(val) => setNewLineField({ ...newLineField, type: val as any })}>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="string">String</SelectItem>
-                                                <SelectItem value="number">Number</SelectItem>
-                                                <SelectItem value="date">Date</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <Input placeholder="Description (optional)" value={newLineField.description} onChange={(e) => setNewLineField({ ...newLineField, description: e.target.value })} />
-                                        <label className="text-xs flex items-center gap-2">
-                                            <input type="checkbox" checked={newLineField.required} onChange={(e) => setNewLineField({ ...newLineField, required: e.target.checked })} /> Required
-                                        </label>
-                                        <div className="flex gap-2">
-                                            <Button size="sm" onClick={() => addCustomField('line')}>Add</Button>
-                                            <Button size="sm" variant="outline" onClick={() => setShowAddLine(false)}>Cancel</Button>
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <Button variant="ghost" size="sm" onClick={() => setShowAddHeader(true)}>+ Add Header Field</Button>
+                                    )
                                 ) : (
-                                    <Button variant="ghost" size="sm" onClick={() => setShowAddLine(true)}>+ Add Line-Item Field</Button>
+                                    showAddLine ? (
+                                        <div className="border rounded p-2 space-y-2">
+                                            <Input placeholder="Field label" value={newLineField.label} onChange={(e) => setNewLineField({ ...newLineField, label: e.target.value })} />
+                                            <Select value={newLineField.type} onValueChange={(val) => setNewLineField({ ...newLineField, type: val as any })}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="string">String</SelectItem>
+                                                    <SelectItem value="number">Number</SelectItem>
+                                                    <SelectItem value="date">Date</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <Input placeholder="Description (optional)" value={newLineField.description} onChange={(e) => setNewLineField({ ...newLineField, description: e.target.value })} />
+                                            <label className="text-xs flex items-center gap-2">
+                                                <input type="checkbox" checked={newLineField.required} onChange={(e) => setNewLineField({ ...newLineField, required: e.target.checked })} /> Required
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <Button size="sm" onClick={() => addCustomField('line')}>Add</Button>
+                                                <Button size="sm" variant="outline" onClick={() => setShowAddLine(false)}>Cancel</Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <Button variant="ghost" size="sm" onClick={() => setShowAddLine(true)}>+ Add Line Field</Button>
+                                    )
                                 )}
                             </div>
 
-                            <div className="space-y-3">
+                            {/* Action buttons - fixed at bottom */}
+                            <div className="space-y-3 flex-shrink-0">
                                 {supplierName && (
                                     <Button
                                         variant="outline"
@@ -1033,7 +968,7 @@ export default function JobWorkPage(props: any) {
                             </div>
 
                             {analysisResult.notes && (
-                                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded flex-shrink-0">
                                     <p className="text-sm text-yellow-800">
                                         <strong>AI Notes:</strong> {analysisResult.notes}
                                     </p>
@@ -1057,7 +992,7 @@ export default function JobWorkPage(props: any) {
 
                     {/* Review Step */}
                     {currentStep === 'reviewing' && (
-                        <div className="p-4">
+                        <div className="p-4 h-full overflow-y-auto">
                             <div className="mb-4">
                                 <h3 className="text-lg font-semibold">Review Extracted Data</h3>
                                 <p className="text-sm text-muted-foreground">
@@ -1078,8 +1013,8 @@ export default function JobWorkPage(props: any) {
                                                         <p className="text-xs text-muted-foreground">Size: {Math.round((selectedFile?.fileSize || 0) / 1024)}KB</p>
                                                     </div>
                                                     <DataTable
-                                                        headerData={(extractedData as any).header}
-                                                        lineItemsData={(extractedData as any).lineItems}
+                                                        headerData={docData.header}
+                                                        lineItemsData={docData.lineItems}
                                                         headerFields={analysisResult?.headerFields ?? []}
                                                         lineItemFields={analysisResult?.lineItemFields ?? []}
                                                         onChange={(updated: any) => {
@@ -1142,6 +1077,12 @@ export default function JobWorkPage(props: any) {
                             </div>
                         </div>
                     )}
+                </ResizablePanel>
+
+                <ResizableHandle withHandle />
+                {/* Document Preview */}
+                <ResizablePanel defaultSize={40} minSize={25}>
+                    <DocumentView files={files} />
                 </ResizablePanel>
             </ResizablePanelGroup>
         </div>

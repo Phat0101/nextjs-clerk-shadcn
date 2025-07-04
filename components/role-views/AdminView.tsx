@@ -517,8 +517,8 @@ function AllJobsView() {
     
     if (isExpanded) {
       return (
-        <Card key={job._id} className="mb-2 cursor-pointer" onClick={onToggle}>
-          <CardContent className="p-3 py-0">
+        <Card key={job._id} className="mb-2 cursor-pointer p-0" onClick={onToggle}>
+          <CardContent className="p-3">
             <div className="space-y-3">
               {/* Summary Line */}
               <div className="flex items-center justify-between">
@@ -543,7 +543,7 @@ function AllJobsView() {
                       );
                     })()
                   ) : (
-                    <TimeRemaining deadline={job.deadline} compact />
+                  <TimeRemaining deadline={job.deadline} compact />
                   )}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">

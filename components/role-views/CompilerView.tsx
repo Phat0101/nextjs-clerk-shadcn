@@ -128,7 +128,7 @@ export default function CompilerView({ currentView, onViewChange }: CompilerView
                     <TimeRemaining deadline={job.deadline} />
                   </div>
                 </div>
-                <Button 
+                <Button
                   onClick={() => handleAcceptJob(job._id)}
                   size="sm"
                 >
@@ -161,19 +161,12 @@ export default function CompilerView({ currentView, onViewChange }: CompilerView
         <CardContent>
           <div className="space-y-3">
             {myActiveJobs.slice(0, 3).map((job) => (
-              <div key={job._id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <h3 className="font-medium">{job.title}</h3>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">In Progress</Badge>
-                    <span className="text-sm text-gray-500">${(job.totalPrice / 100).toFixed(2)}</span>
-                    <TimeRemaining deadline={job.deadline} />
-                  </div>
-                </div>
-                <Button 
-                  onClick={() => router.push(`/jobs/${job._id}`)}
-                  size="sm"
-                >
+              <div key={job._id} className="grid items-center gap-3 p-3 border rounded-lg grid-cols-6">
+                <h3 className="font-medium col-span-2 truncate">{job.title}</h3>
+                <Badge variant="secondary">In Progress</Badge>
+                <span className="text-sm text-gray-500">${(job.totalPrice / 100).toFixed(2)}</span>
+                <TimeRemaining deadline={job.deadline} />
+                <Button onClick={() => router.push(`/jobs/${job._id}`)} size="sm">
                   Continue Work
                 </Button>
               </div>
@@ -190,10 +183,10 @@ export default function CompilerView({ currentView, onViewChange }: CompilerView
   );
 }
 
-function AvailableJobsView({ 
-  availableJobs, 
-  onAccept 
-}: { 
+function AvailableJobsView({
+  availableJobs,
+  onAccept
+}: {
   availableJobs: Array<{
     _id: string;
     title: string;
@@ -202,7 +195,7 @@ function AvailableJobsView({
     deadline: number;
     status: string;
   }>;
-  onAccept: (id: string)=>void;
+  onAccept: (id: string) => void;
 }) {
   return (
     <div className="p-6">
@@ -222,7 +215,7 @@ function AvailableJobsView({
                     <TimeRemaining deadline={job.deadline} />
                   </div>
                 </div>
-                <Button 
+                <Button
                   onClick={() => onAccept(job._id)}
                 >
                   Accept Job
@@ -243,10 +236,10 @@ function AvailableJobsView({
   );
 }
 
-function ActiveJobsView({ 
-  activeJobs, 
-  router 
-}: { 
+function ActiveJobsView({
+  activeJobs,
+  router
+}: {
   activeJobs: Array<{
     _id: string;
     title: string;
@@ -261,21 +254,14 @@ function ActiveJobsView({
       <h1 className="text-2xl font-bold mb-6">Active Jobs</h1>
       <div className="grid gap-4">
         {activeJobs.map((job) => (
-          <Card key={job._id}>
+          <Card key={job._id} className="p-0">
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">{job.title}</h3>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">In Progress</Badge>
-                    <span className="text-sm text-gray-500">${(job.totalPrice / 100).toFixed(2)}</span>
-                    <TimeRemaining deadline={job.deadline} />
-                  </div>
-                </div>
-                <Button 
-                  onClick={() => router.push(`/jobs/${job._id}`)}
-                  size="sm"
-                >
+              <div className="grid items-center grid-cols-9">
+                <h3 className="font-medium col-span-5 truncate">{job.title}</h3>
+                <Badge variant="secondary">In Progress</Badge>
+                <span className="text-sm text-gray-500">${(job.totalPrice / 100).toFixed(2)}</span>
+                <TimeRemaining deadline={job.deadline} />
+                <Button onClick={() => router.push(`/jobs/${job._id}`)} size="sm">
                   Continue Work
                 </Button>
               </div>

@@ -127,7 +127,7 @@ export default function AuthenticatedLayout({
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar currentView={currentView} onViewChange={handleViewChange} />
-      <main className="flex-1 overflow-auto bg-white">
+      <main className="flex-1 overflow-auto bg-white ml-16">
         {children}
       </main>
     </div>

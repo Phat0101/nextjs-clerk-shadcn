@@ -5,9 +5,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { DataTable } from "@/components/ui/data-table";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronUp, Download } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 export default function CompletedJobsView() {
   const jobs = useQuery(api.jobs.getMyCompleted);
@@ -56,7 +55,7 @@ function CompletedJobCard({
 
   if (expanded) {
     return (
-      <Card className="mb-2">
+      <Card className="mb-2 p-0">
         <CardHeader
           onClick={onToggle}
           className="cursor-pointer flex flex-row items-center justify-between p-3"
@@ -67,7 +66,7 @@ function CompletedJobCard({
           </div>
           <ChevronUp className="w-4 h-4 text-gray-400" />
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 mb-2">
           {output ? (
             <>
               {Array.isArray(output.extractedData?.documents) ? (
@@ -95,13 +94,6 @@ function CompletedJobCard({
                   onExportCSV={downloadCsv}
                 />
               )}
-              <Button
-                onClick={downloadCsv}
-                variant="outline"
-                className="mt-2 w-full"
-              >
-                <Download className="w-4 h-4 mr-2" /> Download CSV
-              </Button>
             </>
           ) : (
             <div>Loading output...</div>
@@ -118,9 +110,6 @@ function CompletedJobCard({
     >
       <div>
         <span className="font-medium text-gray-900">{job.title}</span>
-        <span className="text-xs text-gray-500 ml-2">
-          ${(job.totalPrice / 100).toFixed(2)}
-        </span>
       </div>
       <ChevronDown className="w-4 h-4 text-gray-400" />
     </div>
