@@ -2,8 +2,8 @@
 import { streamText, tool } from 'ai';
 import { fetchMutation, fetchAction } from 'convex/nextjs';
 import { api as convexApi } from '@/convex/_generated/api';
-import { google } from '@ai-sdk/google';
-// import { anthropic } from '@ai-sdk/anthropic';
+// import { google } from '@ai-sdk/google';
+import { anthropic } from '@ai-sdk/anthropic';
 import { Id } from '@/convex/_generated/dataModel';
 import {
   TRANSPORT_ENUM,
@@ -31,73 +31,73 @@ export const maxDuration = 30;
 //  the language model doesn't have to build nested objects.
 // ---------------------------------------------------------------------------
 
-const flatShipmentSchema = z.object({
-  // Mode
-  transport: z.enum(TRANSPORT_ENUM),
-  container: z.enum(CONTAINER_ENUM),
-  type: z.enum(TYPE_ENUM),
-
-  // Consignor
-  consignor_company: z.string().nullable().optional(),
-  consignor_address: z.string().nullable().optional(),
-  consignor_city_state: z.string().nullable().optional(),
-  consignor_country: z.string().nullable().optional(),
-
-  // Consignee
-  consignee_company: z.string().nullable().optional(),
-  consignee_address: z.string().nullable().optional(),
-  consignee_city_state: z.string().nullable().optional(),
-  consignee_country: z.string().nullable().optional(),
-
-  // Details – identifiers & routing
-  details_house_bill: z.string().nullable().optional(),
-  details_domestic: z.boolean().nullable().optional(),
-  details_origin: z.string().nullable().optional(),
-  details_destination: z.string().nullable().optional(),
-  details_etd: z.string().nullable().optional(),
-  details_eta: z.string().nullable().optional(),
-
-  // Details – weights / volumes
-  details_weight_value: z.number().nullable().optional(),
-  details_weight_unit: z.enum(WEIGHT_UNIT_ENUM).nullable().optional(),
-  details_volume_value: z.number().nullable().optional(),
-  details_volume_unit: z.enum(VOLUME_UNIT_ENUM).nullable().optional(),
-  details_chargeable_value: z.number().nullable().optional(),
-  details_chargeable_unit: z.enum(VOLUME_UNIT_ENUM).nullable().optional(),
-
-  // Details – packages
-  details_packages_count: z.number().nullable().optional(),
-  details_packages_type: z.enum(PACKAGES_ENUM).nullable().optional(),
-  details_wv_ratio: z.number().nullable().optional(),
-  details_inners_count: z.number().nullable().optional(),
-  details_inners_type: z.enum(PACKAGES_ENUM).nullable().optional(),
-
-  // Details – values & description
-  details_goods_value_amount: z.number().nullable().optional(),
-  details_goods_value_currency: z.enum(CURRENCY_ENUM).nullable().optional(),
-  details_insurance_value_amount: z.number().nullable().optional(),
-  details_insurance_value_currency: z.enum(CURRENCY_ENUM).nullable().optional(),
-  details_description: z.string().nullable().optional().describe('Summary description of the goods'),
-  details_marks_numbers: z.string().nullable().optional(),
-
-  // Details – commercial terms
-  details_incoterm: z.enum(INCOTERM_ENUM).nullable().optional(),
-  details_free_on_board: z.boolean().nullable().optional(),
-  details_spot_rate: z.number().nullable().optional(),
-  details_spot_rate_type: z.enum(SPOT_RATE_TYPE_ENUM).nullable().optional(),
-  details_use_standard_rate: z.boolean().nullable().optional(),
-  details_service_level: z.enum(SERVICE_LEVEL_ENUM).nullable().optional(),
-  details_release_type: z.enum(RELEASE_TYPE_ENUM).nullable().optional(),
-  details_charges_apply: z.enum(CHARGES_APPLY_ENUM).nullable().optional(),
-  details_phase: z.enum(PHASE_ENUM).nullable().optional(),
-  details_order_refs: z.string().nullable().optional(),
-
-  // Customs fields
-  customs_aqis_status: z.string().nullable().optional(),
-  customs_customs_status: z.string().nullable().optional(),
-  customs_subject_to_aqis: z.boolean().nullable().optional(),
-  customs_subject_to_jfis: z.boolean().nullable().optional(),
-});
+// const flatShipmentSchema = z.object({
+//   // Mode
+//   transport: z.enum(TRANSPORT_ENUM),
+//   container: z.enum(CONTAINER_ENUM),
+//   type: z.enum(TYPE_ENUM),
+//
+//   // Consignor
+//   consignor_company: z.string().nullable().optional(),
+//   consignor_address: z.string().nullable().optional(),
+//   consignor_city_state: z.string().nullable().optional(),
+//   consignor_country: z.string().nullable().optional(),
+//
+//   // Consignee
+//   consignee_company: z.string().nullable().optional(),
+//   consignee_address: z.string().nullable().optional(),
+//   consignee_city_state: z.string().nullable().optional(),
+//   consignee_country: z.string().nullable().optional(),
+//
+//   // Details – identifiers & routing
+//   details_house_bill: z.string().nullable().optional(),
+//   details_domestic: z.boolean().nullable().optional(),
+//   details_origin: z.string().nullable().optional(),
+//   details_destination: z.string().nullable().optional(),
+//   details_etd: z.string().nullable().optional(),
+//   details_eta: z.string().nullable().optional(),
+//
+//   // Details – weights / volumes
+//   details_weight_value: z.number().nullable().optional(),
+//   details_weight_unit: z.enum(WEIGHT_UNIT_ENUM).nullable().optional(),
+//   details_volume_value: z.number().nullable().optional(),
+//   details_volume_unit: z.enum(VOLUME_UNIT_ENUM).nullable().optional(),
+//   details_chargeable_value: z.number().nullable().optional(),
+//   details_chargeable_unit: z.enum(VOLUME_UNIT_ENUM).nullable().optional(),
+//
+//   // Details – packages
+//   details_packages_count: z.number().nullable().optional(),
+//   details_packages_type: z.enum(PACKAGES_ENUM).nullable().optional(),
+//   details_wv_ratio: z.number().nullable().optional(),
+//   details_inners_count: z.number().nullable().optional(),
+//   details_inners_type: z.enum(PACKAGES_ENUM).nullable().optional(),
+//
+//   // Details – values & description
+//   details_goods_value_amount: z.number().nullable().optional(),
+//   details_goods_value_currency: z.enum(CURRENCY_ENUM).nullable().optional(),
+//   details_insurance_value_amount: z.number().nullable().optional(),
+//   details_insurance_value_currency: z.enum(CURRENCY_ENUM).nullable().optional(),
+//   details_description: z.string().nullable().optional().describe('Summary description of the goods'),
+//   details_marks_numbers: z.string().nullable().optional(),
+//
+//   // Details – commercial terms
+//   details_incoterm: z.enum(INCOTERM_ENUM).nullable().optional(),
+//   details_free_on_board: z.boolean().nullable().optional(),
+//   details_spot_rate: z.number().nullable().optional(),
+//   details_spot_rate_type: z.enum(SPOT_RATE_TYPE_ENUM).nullable().optional(),
+//   details_use_standard_rate: z.boolean().nullable().optional(),
+//   details_service_level: z.enum(SERVICE_LEVEL_ENUM).nullable().optional(),
+//   details_release_type: z.enum(RELEASE_TYPE_ENUM).nullable().optional(),
+//   details_charges_apply: z.enum(CHARGES_APPLY_ENUM).nullable().optional(),
+//   details_phase: z.enum(PHASE_ENUM).nullable().optional(),
+//   details_order_refs: z.string().nullable().optional(),
+//
+//   // Customs fields
+//   customs_aqis_status: z.string().nullable().optional(),
+//   customs_customs_status: z.string().nullable().optional(),
+//   customs_subject_to_aqis: z.boolean().nullable().optional(),
+//   customs_subject_to_jfis: z.boolean().nullable().optional(),
+// });
 
 // Helper to decide if URL is image
 const isImageUrl = (url: string) => /\.(jpg|jpeg|png|gif|bmp|webp)(\?|$)/i.test(url);
@@ -167,122 +167,120 @@ export async function POST(req: Request) {
     }
   }
 
-  // Tool definition – model fills shipment schema directly
-  const extractShipment = tool({
-    description: 'Extract and structure shipment data from shipping documents. Call this tool ONLY ONCE per conversation to extract all data from all provided documents.',
-    parameters: flatShipmentSchema,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    execute: async function ({
-      transport, container, type,
-      consignor_company, consignor_address, consignor_city_state, consignor_country,
-      consignee_company, consignee_address, consignee_city_state, consignee_country,
-      details_house_bill, details_domestic, details_origin, details_destination, details_etd, details_eta,
-      details_weight_value, details_weight_unit, details_volume_value, details_volume_unit,
-      details_chargeable_value, details_chargeable_unit, details_packages_count, details_packages_type,
-      details_wv_ratio, details_inners_count, details_inners_type,
-      details_goods_value_amount, details_goods_value_currency,
-      details_insurance_value_amount, details_insurance_value_currency,
-      details_description, details_marks_numbers,
-      details_incoterm, details_free_on_board, details_spot_rate, details_spot_rate_type,
-      details_use_standard_rate, details_service_level, details_release_type, details_charges_apply,
-      details_phase, details_order_refs,
-      customs_aqis_status, customs_customs_status, customs_subject_to_aqis, customs_subject_to_jfis,
-    }: any) {
-      console.log('🔧 Extract shipment tool called', {
-        transport, container, type,
-        consignor_company, consignor_address, consignor_city_state, consignor_country,
-        consignee_company, consignee_address, consignee_city_state, consignee_country,
-        details_house_bill, details_domestic, details_origin, details_destination, details_etd, details_eta,
-        details_weight_value, details_weight_unit, details_volume_value, details_volume_unit,
-        details_chargeable_value, details_chargeable_unit, details_packages_count, details_packages_type,
-        details_wv_ratio, details_inners_count, details_inners_type,
-        details_goods_value_amount, details_goods_value_currency,
-        details_insurance_value_amount, details_insurance_value_currency,
-        details_description, details_marks_numbers,
-        details_incoterm, details_free_on_board, details_spot_rate, details_spot_rate_type,
-        details_use_standard_rate, details_service_level, details_release_type, details_charges_apply,
-        details_phase, details_order_refs,
-        customs_aqis_status, customs_customs_status, customs_subject_to_aqis, customs_subject_to_jfis,
-      });
-      const extracted = {
-        mode: { transport, container, type },
-        consignor: {
-          company: consignor_company || '',
-          address: consignor_address || '',
-          city_state: consignor_city_state || '',
-          country: consignor_country || '',
-        },
-        consignee: {
-          company: consignee_company || '',
-          address: consignee_address || '',
-          city_state: consignee_city_state || '',
-          country: consignee_country || '',
-        },
-        details: {
-          house_bill: details_house_bill || '',
-          domestic: details_domestic || '',
-          origin: details_origin || '',
-          destination: details_destination || '',
-          etd: details_etd || '',
-          eta: details_eta || '',
-          weight_value: details_weight_value || '',
-          weight_unit: details_weight_unit || '',
-          volume_value: details_volume_value || '',
-          volume_unit: details_volume_unit || '',
-          chargeable_value: details_chargeable_value || '',
-          chargeable_unit: details_chargeable_unit || '',
-          packages_count: details_packages_count || '',
-          packages_type: details_packages_type || '',
-          wv_ratio: details_wv_ratio || '',
-          inners_count: details_inners_count || '',
-          inners_type: details_inners_type || '',
-          goods_value_amount: details_goods_value_amount || '',
-          goods_value_currency: details_goods_value_currency || '',
-          insurance_value_amount: details_insurance_value_amount || '',
-          insurance_value_currency: details_insurance_value_currency || '',
-          description: details_description || '',
-          marks_numbers: details_marks_numbers || '',
-          incoterm: details_incoterm || '',
-          free_on_board: details_free_on_board || '',
-          spot_rate: details_spot_rate || '',
-          spot_rate_type: details_spot_rate_type || '',
-          use_standard_rate: details_use_standard_rate || '',
-          service_level: details_service_level || '',
-          release_type: details_release_type || '',
-          charges_apply: details_charges_apply || '',
-          phase: details_phase || '',
-          order_refs: details_order_refs || '',
-        },
-        customs_fields: {
-          aqis_status: customs_aqis_status || '',
-          customs_status: customs_customs_status || '',
-          subject_to_aqis: customs_subject_to_aqis || '',
-          subject_to_jfis: customs_subject_to_jfis || '',
-        },
-      };
+  // --------------------------------------------------
+  // 5 Separate tools for incremental extraction
+  // --------------------------------------------------
 
-      console.log('Flat extraction complete', extracted);
-
-      await fetchAction(convexApi.jobs.saveExtractedData, {
-        jobId: jobId as Id<'jobs'>,
-        data: extracted,
-      });
-
-      return { extracted };
-    },
+  const modeSchema = z.object({
+    transport: z.enum(TRANSPORT_ENUM),
+    container: z.enum(CONTAINER_ENUM),
+    type: z.enum(TYPE_ENUM),
   });
 
+  const consignorSchema = z.object({
+    company: z.string().nullable().optional(),
+    address: z.string().nullable().optional(),
+    city_state: z.string().nullable().optional(),
+    country: z.string().nullable().optional(),
+  });
+
+  const consigneeSchema = consignorSchema;
+
+  const detailsSchema = z.object({
+    house_bill: z.string().nullable().optional(),
+    domestic: z.boolean().nullable().optional(),
+    origin: z.string().nullable().optional(),
+    destination: z.string().nullable().optional(),
+    etd: z.string().nullable().optional(),
+    eta: z.string().nullable().optional(),
+    weight_value: z.number().nullable().optional(),
+    weight_unit: z.enum(WEIGHT_UNIT_ENUM).nullable().optional(),
+    volume_value: z.number().nullable().optional(),
+    volume_unit: z.enum(VOLUME_UNIT_ENUM).nullable().optional(),
+    chargeable_value: z.number().nullable().optional(),
+    chargeable_unit: z.enum(VOLUME_UNIT_ENUM).nullable().optional(),
+    packages_count: z.number().nullable().optional(),
+    packages_type: z.enum(PACKAGES_ENUM).nullable().optional(),
+    wv_ratio: z.number().nullable().optional(),
+    inners_count: z.number().nullable().optional(),
+    inners_type: z.enum(PACKAGES_ENUM).nullable().optional(),
+    goods_value_amount: z.number().nullable().optional(),
+    goods_value_currency: z.enum(CURRENCY_ENUM).nullable().optional(),
+    insurance_value_amount: z.number().nullable().optional(),
+    insurance_value_currency: z.enum(CURRENCY_ENUM).nullable().optional(),
+    description: z.string().nullable().optional(),
+    marks_numbers: z.string().nullable().optional(),
+    incoterm: z.enum(INCOTERM_ENUM).nullable().optional(),
+    free_on_board: z.boolean().nullable().optional(),
+    spot_rate: z.number().nullable().optional(),
+    spot_rate_type: z.enum(SPOT_RATE_TYPE_ENUM).nullable().optional(),
+    use_standard_rate: z.boolean().nullable().optional(),
+    service_level: z.enum(SERVICE_LEVEL_ENUM).nullable().optional(),
+    release_type: z.enum(RELEASE_TYPE_ENUM).nullable().optional(),
+    charges_apply: z.enum(CHARGES_APPLY_ENUM).nullable().optional(),
+    phase: z.enum(PHASE_ENUM).nullable().optional(),
+    order_refs: z.string().nullable().optional(),
+  });
+
+  const customsSchema = z.object({
+    aqis_status: z.string().nullable().optional(),
+    customs_status: z.string().nullable().optional(),
+    subject_to_aqis: z.boolean().nullable().optional(),
+    subject_to_jfis: z.boolean().nullable().optional(),
+  });
+
+  // Helper to create tool that saves partial under given key
+  function createPartialTool(name: string, key: string, schema: z.ZodTypeAny) {
+    const fieldNames = Object.keys((schema as any).shape ?? {});
+    const fieldList = fieldNames.join(', ');
+    return tool({
+      description: `Extract the ${key} section of the shipment data. Provide values for these fields: ${fieldList}. Return ONLY the parameters defined.`,
+      parameters: schema,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      execute: async function (/** @type {any} */ params: any) {
+        // Use explicit parameter variable instead of generic 'args' for better model clarity
+        const sectionData = params; // alias with semantic name
+        const partial = { [key]: sectionData };
+        console.log(`🔧 ${name} called`, partial);
+        await fetchAction((convexApi as any).jobs.saveExtractedDataPartial, {
+          jobId: jobId as Id<'jobs'>,
+          partial,
+        });
+        return { extracted: partial };
+      },
+    });
+  }
+
+  const extractMode = createPartialTool('extract_mode', 'mode', modeSchema);
+  const extractConsignor = createPartialTool('extract_consignor', 'consignor', consignorSchema);
+  const extractConsignee = createPartialTool('extract_consignee', 'consignee', consigneeSchema);
+  const extractDetails = createPartialTool('extract_details', 'details', detailsSchema);
+  const extractCustoms = createPartialTool('extract_customs', 'customs_fields', customsSchema);
+
   const result = streamText({
-    model: google('gemini-2.5-pro'),
+    model: anthropic('claude-4-sonnet-20250514'),
     system: `You are a shipment data extraction specialist. Your task is to extract structured data from shipment documents.
 
 CRITICAL: Use the extract_shipment tool EXACTLY ONCE to extract all data, then provide a brief summary. Do not call the tool multiple times.
 
+CRITICAL: You have FIVE separate tools – extract_mode, extract_consignor, extract_consignee, extract_details, extract_customs.
+You MUST call EACH of these tools exactly once to fully register a shipment. The recommended order is:
+  1. extract_mode – identify transport/container/type
+  2. extract_consignor – consignor company/address/etc.
+  3. extract_consignee – consignee company/address/etc.
+  4. extract_customs – customs & AQIS fields
+  5. extract_details – routing, weights, packages, commercial terms
+
+Strict rules:
+• Call every tool once. Missing a tool is unacceptable.
+• Never call a tool twice.
+• After the 5th tool call, return \`DONE\` followed by a concise Markdown summary.
+• Do NOT output raw JSON – the UI will render results.
+
 WORKFLOW:
 1. Analyze ALL provided documents
-2. Call extract_shipment tool ONE TIME with all extracted data
-3. Provide a brief natural language summary
-4. STOP - do not make additional tool calls
+2. Call the tools in the order above, waiting for each result before the next.
+3. After completing all five calls, respond with \`DONE\` + summary and STOP
 
 EXTRACTION RULES:
 - Extract exact values from documents when clearly visible
@@ -295,10 +293,16 @@ EXTRACTION RULES:
 After calling the tool once, your job is complete.`,
     messages,
     temperature: 0,
-    maxSteps: 2,
+    maxSteps: 12,
     toolChoice: 'auto',
     toolCallStreaming: true,
-    tools: { extract_shipment: extractShipment },
+    tools: {
+      extract_mode: extractMode,
+      extract_consignor: extractConsignor,
+      extract_consignee: extractConsignee,
+      extract_details: extractDetails,
+      extract_customs: extractCustoms,
+    },
     onFinish: async ({ response, usage }) => {
       try {
         // Log token usage
