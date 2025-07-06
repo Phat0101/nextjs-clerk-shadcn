@@ -119,11 +119,8 @@ export async function POST(request: NextRequest) {
     });
     const totalFiles = filesData.length > 0 ? filesData.length : fileUrls.length;
     
-    const dynamicSchema = totalFiles > 1 
-      ? z.object({
-          documents: z.array(singleDocumentSchema).length(totalFiles).describe('Extracted data from each document in order')
-        })
-      : singleDocumentSchema;
+    // Always return a single combined result, even if multiple documents are provided
+    const dynamicSchema = singleDocumentSchema;
 
     // Create field descriptions for the prompt
     const headerDescriptions = headerFieldsInput.map((field: ConfirmedField) => 
@@ -139,7 +136,7 @@ export async function POST(request: NextRequest) {
     const messageContent: Array<any> = [
       {
         type: 'text',
-        text: `Extract the following information from ${totalFiles} invoice document${totalFiles > 1 ? 's' : ''}. Be precise and accurate.
+        text: `Extract the following information from ${totalFiles} invoice document${totalFiles > 1 ? 's' : ''}. If multiple documents are provided they belong to the same transaction; combine their information into ONE set of header fields and ONE unified list of line-items. Be precise and accurate.
 
 Header fields (single occurrence per invoice):
 ${headerDescriptions}

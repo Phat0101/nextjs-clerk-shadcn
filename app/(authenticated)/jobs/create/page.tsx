@@ -79,11 +79,11 @@ export default function CreateJobPage() {
           fileType: file.type,
         });
       }
-
+      
       // Create job with original files metadata
-      await createJob({
-        title,
-        priceUnitId: selectedPriceUnitId as Id<"priceUnits">,
+      await createJob({ 
+        title, 
+        priceUnitId: selectedPriceUnitId as Id<"priceUnits">, 
         deadlineHours,
         files: uploadedFiles,
       });

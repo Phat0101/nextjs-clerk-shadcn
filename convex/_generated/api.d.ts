@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as chat from "../chat.js";
 import type * as embeddings from "../embeddings.js";
 import type * as jobs from "../jobs.js";
 import type * as myFunctions from "../myFunctions.js";
@@ -32,6 +33,7 @@ import type * as users from "../users.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  chat: typeof chat;
   embeddings: typeof embeddings;
   jobs: typeof jobs;
   myFunctions: typeof myFunctions;

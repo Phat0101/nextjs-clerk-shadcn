@@ -84,6 +84,17 @@ export default defineSchema({
     extractedData: v.any(),
   }).index("by_jobId", ["jobId"]),
 
+  // Chat messages for each job's conversational interface
+  chatMessages: defineTable({
+    jobId: v.id("jobs"),
+    // full UIMessage object stored for perfect restoration
+    message: v.any(),
+    // For quick filtering we still keep role and text snippet (optional)
+    role: v.optional(v.union(v.literal("user"), v.literal("assistant"), v.literal("system"))),
+    content: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_jobId", ["jobId"]),
+
   // Invoice templates for automatic extraction
   invoiceTemplates: defineTable({
     // The template may be created by an authenticated user (preferred) or anonymously via the agent.
