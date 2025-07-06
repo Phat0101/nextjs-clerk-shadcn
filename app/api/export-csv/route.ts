@@ -22,6 +22,13 @@ export async function POST(request: NextRequest) {
       return datum && 'header' in datum && 'lineItems' in datum;
     };
 
+    // Detect shipment 5-section structure
+    const SECTION_ORDER = ['mode','consignor','consignee','customs_fields','details'];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isShipmentObject = (datum: any): boolean => {
+      return datum && SECTION_ORDER.every(k => k in datum);
+    };
+
     if (isHeaderLineItem(data)) {
       // Single document with header + line items
       const headerKeys = Object.keys(data.header as Record<string, unknown>);
@@ -45,6 +52,21 @@ export async function POST(request: NextRequest) {
           csvContent += rowValues.join(',') + '\n';
         });
       }
+    } else if (isShipmentObject(data)) {
+      // 5-section shipment object
+      SECTION_ORDER.forEach(sectionKey => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const section = (data as any)[sectionKey] as Record<string, unknown>;
+        if (!section) return;
+        // Section title row
+        csvContent += `"${sectionKey.toUpperCase()}"\n`;
+        csvContent += 'Field,Value\n';
+        Object.entries(section).forEach(([k,v])=>{
+          const label = labelMap[k]||k;
+          csvContent += `"${label}","${v ?? ''}"\n`;
+        });
+        csvContent += '\n';
+      });
     } else if (Array.isArray(data?.documents)) {
       // Multiple documents scenario
       // Assume each document has header + lineItems
@@ -74,13 +96,27 @@ export async function POST(request: NextRequest) {
         csvContent += '\n';
       });
     } else {
-      // Fallback to previous flat object behaviour
-      const headers = Object.keys(data);
-      const values = Object.values(data);
-      csvContent = [
-        headers.map(h => `"${h}"`).join(','),
-        values.map(v => `"${v ?? ''}"`).join(',')
-      ].join('\n');
+      // Fallback: recursively flatten nested objects so we don't get [object Object]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const flatten = (obj: any, prefix = ""): Record<string, unknown> => {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(obj)) {
+          const key = prefix ? `${prefix}.${k}` : k;
+          if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+            Object.assign(out, flatten(v, key));
+          } else {
+            out[key] = v;
+          }
+        }
+        return out;
+      };
+
+      const flat = flatten(data);
+      const headers = Object.keys(flat);
+      csvContent = 'Field,Value\n';
+      headers.forEach(h=>{
+        csvContent += `"${h}","${flat[h] ?? ''}"\n`;
+      });
     }
 
     // Create filename with timestamp

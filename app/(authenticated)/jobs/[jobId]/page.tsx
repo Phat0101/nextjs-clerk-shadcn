@@ -160,7 +160,7 @@ export default function JobCursorPage(props: any) {
         // If compiler is currently in the "extracting" step and we don't yet have extracted data → show placeholder
         if (job.compilerStep === 'extracting' && !job.extractedData) {
             setIsExtracting(true);
-        } else {
+            } else {
             setIsExtracting(false);
         }
     }, [jobDetails]);
@@ -366,10 +366,60 @@ export default function JobCursorPage(props: any) {
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="bg-white border-b p-2 flex items-center justify-between">
-                <h1 className="text-xl font-bold">{job.title}</h1>
+            <div className="bg-white border-b p-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                    <h1 className="text-xl font-bold">{job.title}</h1>
                     <TimeRemaining deadline={job.deadline} />
-                            </div>
+                </div>
+                {shipmentData && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                            try {
+                                // Helper to flatten nested shipment object
+                                const flatten = (obj: any, prefix = ""): Record<string, unknown> => {
+                                    const res: Record<string, unknown> = {};
+                                    for (const [k, v] of Object.entries(obj)) {
+                                        const key = prefix ? `${prefix}_${k}` : k;
+                                        if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+                                            Object.assign(res, flatten(v, key));
+                                        } else {
+                                            res[key] = v;
+                                        }
+                                    }
+                                    return res;
+                                };
+
+                                const flat = flatten(shipmentData);
+
+                                const resp = await fetch("/api/export-csv", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ data: shipmentData, jobTitle: job.title }),
+                                });
+                                if (!resp.ok) {
+                                    throw new Error("Failed to export CSV");
+                                }
+                                const blob = await resp.blob();
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement("a");
+                                link.href = url;
+                                link.download = `shipment_${job._id}.csv`;
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                                URL.revokeObjectURL(url);
+                            } catch (err) {
+                                console.error(err);
+                                alert("CSV export failed");
+                            }
+                        }}
+                    >
+                        Export CSV
+                    </Button>
+                )}
+            </div>
 
             <ResizablePanelGroup direction="horizontal" className="flex-1">
                 {/* Left – files & chat */}
@@ -397,7 +447,7 @@ export default function JobCursorPage(props: any) {
                                     {file.fileName}
                             </div>
                         ))}
-                                </div>
+                    </div>
 
                         {/* Chat messages */}
                         <div
@@ -414,7 +464,7 @@ export default function JobCursorPage(props: any) {
                                 <div key={m.id || idx} className="space-y-1 text-sm">
                                     <div className="font-semibold text-gray-500">
                                         {m.role === "user" ? "You" : "AI"}
-                            </div>
+                </div>
                                     {/* Render each part according to its type */}
                                     {m.parts?.map((part: any, idx: number) => {
                                         if (part.type === 'text' && typeof part.text === 'string') {
@@ -451,16 +501,16 @@ export default function JobCursorPage(props: any) {
                                                     const name = f?.fileName || 'file';
                                                     return <FilePill key={u} name={name} />;
                                                 })}
-                                                                </div>
+            </div>
                                         );
                                     })()}
                                     {/* Display tool invocation result if available */}
                                     {m.toolInvocations?.map((ti: any) => (
                                         <ToolInvocationDisplay key={ti.toolCallId} invocation={ti} />
                                 ))}
-                                                                </div>
+                        </div>
                             ))}
-                                                                </div>
+                    </div>
 
                         {/* Input */}
                         <form onSubmit={onChatSubmit} className="p-3 border-t flex flex-col gap-2 relative">
@@ -470,21 +520,21 @@ export default function JobCursorPage(props: any) {
                                     {queuedFileUrls.map((u) => {
                                         const f = displayFiles.find(f => f.fileUrl === u);
                                         const name = f?.fileName || 'file';
-                                        return (
+                                    return (
                                             <span key={u} className="flex items-center gap-1 bg-gray-200 text-gray-800 rounded-full px-2 py-0.5 text-xs">
                                                 <FileText className="w-3 h-3" />
                                                 {name}
                                                 <button type="button" onClick={() => setQueuedFileUrls(prev => prev.filter(x => x !== u))} className="ml-1 text-gray-500 hover:text-gray-700">×</button>
                                 </span>
-                                                    );
-                                                })}
-                                    </div>
+                                    );
+                                })}
+                            </div>
                             )}
                             <div className="flex items-center gap-2">
-                            <input
-                                className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                <input
+                                    className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 placeholder="Type a message..."
-                                value={chatInput}
+                                    value={chatInput}
                                 onChange={onInputChange}
                                 onKeyDown={onInputKeyDown}
                                 onDragOver={(e) => e.preventDefault()}
@@ -510,7 +560,7 @@ export default function JobCursorPage(props: any) {
                                             onMouseDown={(e) => { e.preventDefault(); attachFile(file.fileUrl || '', file.fileName); }}
                                         >{file.fileName}</div>
                                     ))}
-                                            </div>
+                                </div>
                             )}
                         </form>
                             </div>

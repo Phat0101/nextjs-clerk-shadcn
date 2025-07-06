@@ -556,6 +556,50 @@ export const saveExtractedData = action({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Incremental extraction support – merge partial data instead of overwriting
+// ---------------------------------------------------------------------------
+
+export const saveExtractedDataPartial = action({
+  args: {
+    jobId: v.id('jobs'),
+    partial: v.any(),
+  },
+  handler: async (ctx, { jobId, partial }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await ctx.runMutation((internal as any).jobs._mergeExtractedDataInternal, { jobId, partial });
+  },
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function deepMerge(target: any, source: any): any {
+  if (typeof target !== 'object' || target === null) return source;
+  const output = { ...target };
+  for (const key of Object.keys(source)) {
+    if (source[key] !== null && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      output[key] = deepMerge(target[key] ?? {}, source[key]);
+    } else {
+      output[key] = source[key];
+    }
+  }
+  return output;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const _mergeExtractedDataInternal = internalMutation({
+  args: {
+    jobId: v.id('jobs'),
+    partial: v.any(),
+  },
+  handler: async (ctx, { jobId, partial }) => {
+    const job = await ctx.db.get(jobId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const current = (job?.extractedData as any) ?? {};
+    const merged = deepMerge(current, partial);
+    await ctx.db.patch(jobId, { extractedData: merged });
+  },
+});
+
 // Internal mutation actually writing the data (no auth, internal only)
 export const _saveExtractedDataInternal = internalMutation({
   args: {
