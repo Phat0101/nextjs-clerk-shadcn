@@ -427,6 +427,7 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: google('gemini-2.5-pro'),
+    seed: 4834,
     // model: anthropic('claude-4-sonnet-20250514'),
     // providerOptions: {
     //   anthropic: {

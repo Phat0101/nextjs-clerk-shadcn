@@ -17,6 +17,21 @@ export async function POST(request: NextRequest) {
       (fields as FieldLabel[]).forEach((f)=>{labelMap[f.name]=f.label||f.name;});
     }
 
+    // Helper to recursively flatten nested objects using dot notation
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const flatten = (obj: any, prefix = ""): Record<string, unknown> => {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        const key = prefix ? `${prefix}.${k}` : k;
+        if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+          Object.assign(out, flatten(v, key));
+        } else {
+          out[key] = v;
+        }
+      }
+      return out;
+    };
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const isHeaderLineItem = (datum: any): datum is { header: Record<string, unknown>; lineItems: unknown[] } => {
       return datum && 'header' in datum && 'lineItems' in datum;
@@ -67,6 +82,55 @@ export async function POST(request: NextRequest) {
         });
         csvContent += '\n';
       });
+    } else if (
+      // N10 6-section structure detection
+      data &&
+      'declarationHeader' in data &&
+      'ownerDetails' in data &&
+      'senderDetails' in data &&
+      'transportInformation' in data &&
+      'goodsDeclaration' in data
+    ) {
+      // N10 object
+      const N10_SECTION_ORDER: Array<{ key: string; title: string; type: 'object' | 'array' }> = [
+        { key: 'declarationHeader', title: 'Declaration Header', type: 'object' },
+        { key: 'ownerDetails', title: 'Owner Details', type: 'object' },
+        { key: 'senderDetails', title: 'Sender Details', type: 'object' },
+        { key: 'transportInformation', title: 'Transport Information', type: 'object' },
+        { key: 'goodsDeclaration', title: 'Goods Declaration', type: 'array' },
+        { key: 'declarationStatement', title: 'Declaration Statement', type: 'object' },
+      ];
+
+      N10_SECTION_ORDER.forEach(({ key, title, type }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const section = (data as any)[key];
+        if (!section) return;
+
+        csvContent += `"${title.toUpperCase()}"\n`;
+
+        if (type === 'object') {
+          csvContent += 'Field,Value\n';
+          const flat = flatten(section);
+          Object.entries(flat).forEach(([k, v]) => {
+            const label = labelMap[k] || k;
+            csvContent += `"${label}","${v ?? ''}"\n`;
+          });
+          csvContent += '\n';
+        } else if (type === 'array' && Array.isArray(section)) {
+          if (section.length === 0) return;
+          // Flatten each row and build header union
+          const flattenedRows = (section as Array<Record<string, unknown>>).map(r => flatten(r));
+          const headersSet = new Set<string>();
+          flattenedRows.forEach(r => Object.keys(r).forEach(k => headersSet.add(k)));
+          const headers = Array.from(headersSet);
+          csvContent += headers.map(h => `"${labelMap[h] || h}"`).join(',') + '\n';
+          flattenedRows.forEach(row => {
+            const rowVals = headers.map(h => `"${row[h] ?? ''}"`);
+            csvContent += rowVals.join(',') + '\n';
+          });
+          csvContent += '\n';
+        }
+      });
     } else if (Array.isArray(data?.documents)) {
       // Multiple documents scenario
       // Assume each document has header + lineItems
@@ -97,20 +161,6 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Fallback: recursively flatten nested objects so we don't get [object Object]
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const flatten = (obj: any, prefix = ""): Record<string, unknown> => {
-        const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(obj)) {
-          const key = prefix ? `${prefix}.${k}` : k;
-          if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
-            Object.assign(out, flatten(v, key));
-          } else {
-            out[key] = v;
-          }
-        }
-        return out;
-      };
-
       const flat = flatten(data);
       const headers = Object.keys(flat);
       csvContent = 'Field,Value\n';
