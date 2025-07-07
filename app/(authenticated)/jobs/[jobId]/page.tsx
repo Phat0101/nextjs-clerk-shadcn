@@ -217,7 +217,7 @@ export default function JobCursorPage(props: any) {
                 if (detectedType) break;
             }
             setExtractionType(detectedType);
-            } else {
+        } else {
             setIsExtracting(false);
             setExtractionType(null);
         }
@@ -227,7 +227,7 @@ export default function JobCursorPage(props: any) {
     const onChatSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (isLoading || !chatInput.trim()) return;
-        
+
         append(
             { role: 'user', content: chatInput, fileUrls: queuedFileUrls } as any,
             { body: { jobId, fileUrls: queuedFileUrls } }
@@ -286,7 +286,7 @@ export default function JobCursorPage(props: any) {
     const mentionSuggestions = useMemo(() => {
         if (!mentionActive) return [] as (JobFile & { isAll?: boolean })[];
         const q = mentionQuery.toLowerCase();
-        
+
         const allFilesAndRegularFiles: (JobFile & { isAll?: boolean })[] = [...displayFiles];
         if (displayFiles.length > 1) {
             allFilesAndRegularFiles.unshift({
@@ -295,7 +295,7 @@ export default function JobCursorPage(props: any) {
                 isAll: true,
             });
         }
-        
+
         return allFilesAndRegularFiles.filter(f => f.fileName.toLowerCase().includes(q));
     }, [mentionActive, mentionQuery, displayFiles]);
 
@@ -375,10 +375,10 @@ export default function JobCursorPage(props: any) {
 
         // Keep localData in sync if shipmentData updates externally (e.g., after extraction)
         useLocalEffect(() => {
-            console.log(`🔄 ${title} section updating:`, { 
-                shipmentData, 
-                sectionKey, 
-                dataObj, 
+            console.log(`🔄 ${title} section updating:`, {
+                shipmentData,
+                sectionKey,
+                dataObj,
                 keys: keys.slice(0, 3) // Log first 3 keys for brevity
             });
             setLocalData(dataObj);
@@ -406,7 +406,7 @@ export default function JobCursorPage(props: any) {
 
         const fmt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
 
-                                    return (
+        return (
             <div className="mb-4">
                 <h4 className="font-medium mb-1">{title}</h4>
                 <table className="min-w-full table-fixed border border-gray-200 text-xs">
@@ -420,8 +420,8 @@ export default function JobCursorPage(props: any) {
                                 <td className="px-2 py-1 border-r bg-gray-50 font-medium whitespace-nowrap h-8 align-middle text-left truncate">{k}</td>
                                 <td className="px-0 h-8 align-middle text-left">
                                     {editing === k ? (
-                                <input
-                                            className="w-96 h-8 bg-white px-2 focus:outline-none focus:ring-0 text-left"
+                                        <input
+                                            className="w-full h-8 bg-white px-2 focus:outline-none focus:ring-0 text-left"
                                             value={temp}
                                             onChange={(e) => setTemp(e.target.value)}
                                             onBlur={() => finishEdit(k)}
@@ -429,7 +429,7 @@ export default function JobCursorPage(props: any) {
                                         />
                                     ) : (
                                         <span
-                                            className="flex items-center w-96 h-8 px-2 cursor-text text-left truncate whitespace-nowrap overflow-hidden"
+                                            className="flex items-center w-full h-8 px-2 cursor-text text-left truncate whitespace-nowrap overflow-hidden"
                                             onClick={() => startEdit(k)}
                                             title={fmt(localData[k])}
                                         >
@@ -441,7 +441,122 @@ export default function JobCursorPage(props: any) {
                         ))}
                     </tbody>
                 </table>
-                                                </div>
+            </div>
+        );
+    };
+
+    // Side-by-side editor for consignor vs consignee
+    const ConsignorConsigneeEditor = () => {
+        const fieldKeys = ['company', 'address', 'city_state', 'country'];
+        const [conLocal, setConLocal] = useLocalState<any>(shipmentData?.consignor || {});
+        const [ceeLocal, setCeeLocal] = useLocalState<any>(shipmentData?.consignee || {});
+        const [editing, setEditing] = useLocalState<{ party: 'consignor' | 'consignee'; key: string } | null>(null);
+        const [temp, setTemp] = useLocalState('');
+
+        // Sync when outer data changes
+        useLocalEffect(() => {
+            setConLocal(shipmentData?.consignor || {});
+            setCeeLocal(shipmentData?.consignee || {});
+        }, [shipmentData]);
+
+        const startEdit = (party: 'consignor' | 'consignee', key: string) => {
+            setEditing({ party, key });
+            const currentVal = party === 'consignor' ? conLocal[key] : ceeLocal[key];
+            setTemp(String(currentVal ?? ''));
+        };
+
+        const finishEdit = async () => {
+            if (!editing) return;
+            const { party, key } = editing;
+            const newVal = temp.trim() === '' ? null : temp;
+            const updatedCon = { ...conLocal };
+            const updatedCee = { ...ceeLocal };
+            if (party === 'consignor') {
+                updatedCon[key] = newVal;
+            } else {
+                updatedCee[key] = newVal;
+            }
+            setConLocal(updatedCon);
+            setCeeLocal(updatedCee);
+
+            const merged = { ...shipmentData, consignor: updatedCon, consignee: updatedCee };
+            setShipmentData(merged);
+
+            try {
+                await updateStep({ jobId, step: 'extracting', shipmentRegistrationExtractedData: merged });
+            } catch (err) {
+                console.error('save consignor/consignee edit failed', err);
+            }
+            setEditing(null);
+        };
+
+        const fmt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
+
+        return (
+            <div className="mb-4">
+                <h4 className="font-medium mb-1">Parties</h4>
+                <table className="min-w-full table-fixed border border-gray-200 text-xs">
+                    <colgroup>
+                        <col style={{ width: '20%' }} />
+                        <col style={{ width: '40%' }} />
+                        <col style={{ width: '40%' }} />
+                    </colgroup>
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-2 py-1 border-r text-left">Field</th>
+                            <th className="px-2 py-1 border-r text-left">Consignor</th>
+                            <th className="px-2 py-1 text-left">Consignee</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {fieldKeys.map((k) => (
+                            <tr key={k} className="border-t last:border-b-0">
+                                <td className="px-2 py-1 border-r whitespace-nowrap align-middle truncate">{k}</td>
+                                {/* Consignor cell */}
+                                <td className="px-0 h-8 border-r align-middle text-left">
+                                    {editing && editing.party === 'consignor' && editing.key === k ? (
+                                        <input
+                                            className="w-full h-8 bg-white px-2 focus:outline-none focus:ring-0 text-left"
+                                            value={temp}
+                                            onChange={(e) => setTemp(e.target.value)}
+                                            onBlur={finishEdit}
+                                            autoFocus
+                                        />
+                                    ) : (
+                                        <span
+                                            className="flex items-center w-full h-8 px-2 cursor-text truncate"
+                                            onClick={() => startEdit('consignor', k)}
+                                            title={fmt(conLocal[k])}
+                                        >
+                                            {fmt(conLocal[k])}
+                                        </span>
+                                    )}
+                                </td>
+                                {/* Consignee cell */}
+                                <td className="px-0 h-8 align-middle text-left">
+                                    {editing && editing.party === 'consignee' && editing.key === k ? (
+                                        <input
+                                            className="w-full h-8 bg-white px-2 focus:outline-none focus:ring-0 text-left"
+                                            value={temp}
+                                            onChange={(e) => setTemp(e.target.value)}
+                                            onBlur={finishEdit}
+                                            autoFocus
+                                        />
+                                    ) : (
+                                        <span
+                                            className="flex items-center w-full h-8 px-2 cursor-text truncate"
+                                            onClick={() => startEdit('consignee', k)}
+                                            title={fmt(ceeLocal[k])}
+                                        >
+                                            {fmt(ceeLocal[k])}
+                                        </span>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         );
     };
 
@@ -450,13 +565,13 @@ export default function JobCursorPage(props: any) {
         const [localData, setLocalData] = useLocalState<Record<string, any>>(data || {});
         const [editing, setEditing] = useLocalState<string | null>(null);
         const [temp, setTemp] = useLocalState('');
-    
+
         useLocalEffect(() => {
             setLocalData(data || {});
         }, [data]);
-    
+
         const getNested = (obj: any, path: string) => path.split('.').reduce((o, i) => (o ? o[i] : null), obj);
-    
+
         const setNested = (obj: any, path: string, value: any) => {
             const keys = path.split('.');
             let current = obj;
@@ -469,12 +584,12 @@ export default function JobCursorPage(props: any) {
             current[keys[keys.length - 1]] = value;
             return obj;
         };
-    
+
         const startEdit = (k: string) => {
             setEditing(k);
             setTemp(String(getNested(localData, k) ?? ''));
         };
-    
+
         const finishEdit = async (k: string) => {
             const newVal = temp.trim() === '' ? null : temp;
             const updated = setNested({ ...localData }, k, newVal);
@@ -482,9 +597,9 @@ export default function JobCursorPage(props: any) {
             onUpdate(updated); // Callback to update parent state
             setEditing(null);
         };
-    
+
         const fmt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
-    
+
         return (
             <Card className="p-0 gap-0 border-0 shadow-none">
                 <h1 className="p-2 font-medium text-sm">{title}</h1>
@@ -501,7 +616,7 @@ export default function JobCursorPage(props: any) {
                                     <td className="px-0 h-8 align-middle text-left">
                                         {editing === k ? (
                                             <input
-                                                className="w-96 h-8 bg-white px-2 focus:outline-none focus:ring-0 text-left"
+                                                className="w-full h-8 bg-white px-2 focus:outline-none focus:ring-0 text-left"
                                                 value={temp}
                                                 onChange={(e) => setTemp(e.target.value)}
                                                 onBlur={() => finishEdit(k)}
@@ -509,7 +624,7 @@ export default function JobCursorPage(props: any) {
                                             />
                                         ) : (
                                             <span
-                                                className="flex items-center w-96 h-8 px-2 cursor-text text-left truncate whitespace-nowrap overflow-hidden"
+                                                className="flex items-center w-full h-8 px-2 cursor-text text-left truncate whitespace-nowrap overflow-hidden"
                                                 onClick={() => startEdit(k)}
                                                 title={fmt(getNested(localData, k))}
                                             >
@@ -558,7 +673,7 @@ export default function JobCursorPage(props: any) {
             </Card>
         );
     };
-    
+
     // Skeleton placeholder table used during extraction
     const SectionPlaceholder = ({ title, keys }: { title: string; keys: string[] }) => (
         <div className="mb-4">
@@ -581,13 +696,13 @@ export default function JobCursorPage(props: any) {
         );
 
     const shipmentPlaceholderSections = [
-        { title: 'Mode', keys: ['transport', 'container', 'type'] },
         { title: 'Consignor', keys: ['company', 'address', 'city_state', 'country'] },
         { title: 'Consignee', keys: ['company', 'address', 'city_state', 'country'] },
-        { title: 'Details', keys: ['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs'] },
+        { title: 'Mode', keys: ['transport', 'container', 'type'] },
         { title: 'Customs', keys: ['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis'] },
+        { title: 'Details', keys: ['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs'] },
     ];
-    
+
     const n10PlaceholderSections = [
         { title: 'Declaration Header', keys: ['ownerReference', 'valuationDate', 'eftPaymentIndicator'] },
         { title: 'Owner Details', keys: ['abn', 'name', 'address.street', 'contact.email'] },
@@ -622,7 +737,7 @@ export default function JobCursorPage(props: any) {
                                 // Determine which data to export based on active tab
                                 const dataToExport = activeDataType === 'shipment' ? shipmentData : n10Data;
                                 const filePrefix = activeDataType === 'shipment' ? 'shipment' : 'n10';
-                                
+
                                 if (!dataToExport) {
                                     alert("No data available for export");
                                     return;
@@ -710,21 +825,19 @@ export default function JobCursorPage(props: any) {
                                     <div className="flex bg-gray-100 rounded-lg p-1">
                                 <button
                                             onClick={() => setActiveDataType('shipment')}
-                                            className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                                                activeDataType === 'shipment'
+                                            className={`px-3 py-1 text-xs rounded-md transition-colors ${activeDataType === 'shipment'
                                                     ? 'bg-white text-blue-600 shadow-sm'
                                                     : 'text-gray-600 hover:text-gray-800'
-                                            }`}
+                                                }`}
                                         >
                                             Shipment Registration
                                 </button>
                                 <button
                                             onClick={() => setActiveDataType('n10')}
-                                            className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                                                activeDataType === 'n10'
+                                            className={`px-3 py-1 text-xs rounded-md transition-colors ${activeDataType === 'n10'
                                                     ? 'bg-white text-blue-600 shadow-sm'
                                                     : 'text-gray-600 hover:text-gray-800'
-                                            }`}
+                                                }`}
                                         >
                                             N10 Document
                                 </button>
@@ -739,17 +852,22 @@ export default function JobCursorPage(props: any) {
                                 // Determine what to show based on available data and active type
                                 const hasShipmentData = !!shipmentData;
                                 const hasN10Data = !!n10Data;
-                                
+
                                 // If both exist, show based on active type
                                 if (hasShipmentData && hasN10Data) {
                                     if (activeDataType === 'shipment') {
                                         return (
                                             <div className="p-4 space-y-4 text-sm">
-                                                <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
-                                                <SectionEditor title="Consignor" sectionKey="consignor" keys={['company', 'address', 'city_state', 'country']} />
-                                                <SectionEditor title="Consignee" sectionKey="consignee" keys={['company', 'address', 'city_state', 'country']} />
+                                                <ConsignorConsigneeEditor />
+                                                <div className="flex gap-4">
+                                                    <div className="flex-1">
+                                                        <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
+                                                    </div>
+                                                </div>
                                                 <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
-                                                <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
                                                                 </div>
                                         );
                                     } else {
@@ -769,25 +887,30 @@ export default function JobCursorPage(props: any) {
                                                 <N10ObjectEditor title="Sender Details" data={n10Data?.senderDetails} keys={n10FieldKeys.senderDetails} onUpdate={(d) => handleUpdate('senderDetails', d)} />
                                                 <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
                                                 <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
-                                                <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({...n10Data, ...d})} />
+                                                <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({ ...n10Data, ...d })} />
                                     </div>
-                                         );
+                                        );
                                     }
                                 }
-                                
+
                                 // If only shipment data exists
                                 if (hasShipmentData && !hasN10Data) {
                                     return (
                                         <div className="p-4 space-y-4 text-sm">
-                                            <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
-                                            <SectionEditor title="Consignor" sectionKey="consignor" keys={['company', 'address', 'city_state', 'country']} />
-                                            <SectionEditor title="Consignee" sectionKey="consignee" keys={['company', 'address', 'city_state', 'country']} />
+                                            <ConsignorConsigneeEditor />
+                                            <div className="flex gap-4">
+                                                <div className="flex-1">
+                                                    <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
+                                                </div>
+                                            </div>
                                             <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
-                                            <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
                                 </div>
                                     );
                                 }
-                                
+
                                 // If only N10 data exists
                                 if (!hasShipmentData && hasN10Data) {
                                     const handleUpdate = async (sectionKey: string, updatedSectionData: any) => {
@@ -799,23 +922,23 @@ export default function JobCursorPage(props: any) {
                                             console.error('save N10 edit failed', err);
                                         }
                                     };
-                                     return (
-                                         <div className="p-4 space-y-4 text-sm">
-                                             <N10ObjectEditor title="Declaration Header" data={n10Data?.declarationHeader} keys={n10FieldKeys.declarationHeader} onUpdate={(d) => handleUpdate('declarationHeader', d)} />
-                                             <N10ObjectEditor title="Owner Details" data={n10Data?.ownerDetails} keys={n10FieldKeys.ownerDetails} onUpdate={(d) => handleUpdate('ownerDetails', d)} />
-                                             <N10ObjectEditor title="Sender Details" data={n10Data?.senderDetails} keys={n10FieldKeys.senderDetails} onUpdate={(d) => handleUpdate('senderDetails', d)} />
-                                             <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
-                                             <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
-                                             <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({...n10Data, ...d})} />
+                                    return (
+                                        <div className="p-4 space-y-4 text-sm">
+                                            <N10ObjectEditor title="Declaration Header" data={n10Data?.declarationHeader} keys={n10FieldKeys.declarationHeader} onUpdate={(d) => handleUpdate('declarationHeader', d)} />
+                                            <N10ObjectEditor title="Owner Details" data={n10Data?.ownerDetails} keys={n10FieldKeys.ownerDetails} onUpdate={(d) => handleUpdate('ownerDetails', d)} />
+                                            <N10ObjectEditor title="Sender Details" data={n10Data?.senderDetails} keys={n10FieldKeys.senderDetails} onUpdate={(d) => handleUpdate('senderDetails', d)} />
+                                            <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
+                                            <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
+                                            <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({ ...n10Data, ...d })} />
                             </div>
-                                     );
+                                    );
                                 }
-                                
+
                                 // If extracting
                                 if (isExtracting) {
                                     const sections = extractionType === 'n10' ? n10PlaceholderSections : shipmentPlaceholderSections;
                                     const title = extractionType === 'n10' ? 'Extracting N10 Document...' : 'Extracting Shipment Data...';
-                                    
+
                                     return (
                                         <div className="p-4 space-y-4 text-sm">
                                             <div className="flex items-center gap-2 mb-2">
@@ -828,7 +951,7 @@ export default function JobCursorPage(props: any) {
                                         </div>
                                     );
                                 }
-                                
+
                                 // Default: no data
                                 return (
                                     <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -906,7 +1029,7 @@ export default function JobCursorPage(props: any) {
                                     ))}
                         </div>
                             ))}
-                            </div>
+                        </div>
 
                         {/* Streaming thinking box */}
                         {thinkingLines.length > 0 && (
@@ -917,8 +1040,8 @@ export default function JobCursorPage(props: any) {
                                 {thinkingLines.map((line, idx) => (
                                     <div key={idx}>{line}</div>
                                 ))}
-                            </div>
-                        )}
+                        </div>
+                    )}
 
                         {/* Input */}
                         <form onSubmit={onChatSubmit} className="p-3 border-t flex flex-col gap-2 relative">
@@ -979,7 +1102,7 @@ export default function JobCursorPage(props: any) {
                                 />
                                 <Button type="submit" size="sm" disabled={isLoading || !chatInput.trim()}>
                                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
-                                    </Button>
+                                </Button>
                             </div>
 
                             {/* mention dropdown */}
