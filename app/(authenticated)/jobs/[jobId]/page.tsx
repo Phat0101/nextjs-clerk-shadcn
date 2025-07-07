@@ -132,9 +132,11 @@ export default function JobCursorPage(props: any) {
     // Preview index for DocumentView
     const [previewIndex, setPreviewIndex] = useState(0);
 
-    // Shipment extraction result (from extract_shipment tool)
+    // Extraction results
     const [shipmentData, setShipmentData] = useState<any | null>(null);
+    const [n10Data, setN10Data] = useState<any | null>(null);
     const [isExtracting, setIsExtracting] = useState(false);
+    const [activeDataType, setActiveDataType] = useState<'shipment' | 'n10'>('shipment');
 
     // Mention/autocomplete state
     const [mentionActive, setMentionActive] = useState(false);
@@ -142,23 +144,35 @@ export default function JobCursorPage(props: any) {
     const [mentionIndex, setMentionIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement | null>(null);
 
-    // Sync shipment data from persisted job record
+    // Sync data from persisted job record
     useEffect(() => {
-        if (jobDetails?.job?.extractedData) {
-            setShipmentData(jobDetails.job.extractedData);
+        if (jobDetails?.job?.shipmentRegistrationExtractedData) {
+            setShipmentData(jobDetails.job.shipmentRegistrationExtractedData);
+        }
+        if (jobDetails?.job?.n10extractedData) {
+            setN10Data(jobDetails.job.n10extractedData);
         }
     }, [jobDetails]);
 
-    // Determine extracting state based on compilerStep and presence of extractedData in DB
+    // Auto-switch to the data type that has data (when only one type exists)
+    useEffect(() => {
+        if (shipmentData && !n10Data) {
+            setActiveDataType('shipment');
+        } else if (!shipmentData && n10Data) {
+            setActiveDataType('n10');
+        }
+    }, [shipmentData, n10Data]);
+
+    // Determine extracting state based on compilerStep and presence of extracted data in DB
     useEffect(() => {
         if (!jobDetails) return;
 
         const { job } = jobDetails;
 
-        // If compiler is currently in the "extracting" step and we don't yet have extracted data → show placeholder
-        if (job.compilerStep === 'extracting' && !job.extractedData) {
+        // If compiler is currently in the "extracting" step and we don't yet have any extracted data → show placeholder
+        if (job.compilerStep === 'extracting' && !job.shipmentRegistrationExtractedData && !job.n10extractedData) {
             setIsExtracting(true);
-            } else {
+        } else {
             setIsExtracting(false);
         }
     }, [jobDetails]);
@@ -292,7 +306,7 @@ export default function JobCursorPage(props: any) {
             setShipmentData(merged);
             // persist
             try {
-                await updateStep({ jobId, step: 'extracting', extractedData: merged });
+                await updateStep({ jobId, step: 'extracting', shipmentRegistrationExtractedData: merged });
             } catch (err) {
                 console.error('save edit failed', err);
             }
@@ -358,8 +372,87 @@ export default function JobCursorPage(props: any) {
                     ))}
                 </tbody>
             </table>
-                            </div>
+        </div>
     );
+
+    // N10 data editor component
+    const N10DataEditor = ({ data }: { data: any }) => {
+        const [localData, setLocalData] = useLocalState<Record<string, any>>(data || {});
+        const [editing, setEditing] = useLocalState<string | null>(null);
+        const [temp, setTemp] = useLocalState('');
+
+        // Keep localData in sync if n10Data updates externally
+        useLocalEffect(() => {
+            console.log('🔄 N10 data updating:', data);
+            setLocalData(data || {});
+        }, [data]);
+
+        const startEdit = (k: string) => {
+            setEditing(k);
+            setTemp(String(localData[k] ?? ''));
+        };
+
+        const finishEdit = async (k: string) => {
+            const newVal = temp.trim() === '' ? null : temp;
+            const updated = { ...localData, [k]: newVal };
+            setLocalData(updated);
+            setN10Data(updated);
+            // persist
+            try {
+                await updateStep({ jobId, step: 'extracting', n10extractedData: updated });
+            } catch (err) {
+                console.error('save N10 edit failed', err);
+            }
+            setEditing(null);
+        };
+
+        const fmt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
+
+        const n10Fields = [
+            'document_number', 'document_date', 'reference_number',
+            'sender_name', 'sender_address', 'receiver_name', 'receiver_address',
+            'cargo_description', 'weight', 'weight_unit', 'dimensions',
+            'special_instructions', 'customs_declaration', 'value_amount', 'value_currency'
+        ];
+
+        return (
+            <div className="mb-4">
+                <h4 className="font-medium mb-1">N10 Document Data</h4>
+                <table className="min-w-full table-fixed border border-gray-200 text-xs">
+                    <colgroup>
+                        <col style={{ width: '35%' }} />
+                        <col style={{ width: '65%' }} />
+                    </colgroup>
+                    <tbody>
+                        {n10Fields.map((k) => (
+                            <tr key={k} className="border-b last:border-b-0">
+                                <td className="px-2 py-1 border-r bg-gray-50 font-medium whitespace-nowrap h-8 align-middle text-left truncate">{k}</td>
+                                <td className="px-0 h-8 align-middle text-left">
+                                    {editing === k ? (
+                                        <input
+                                            className="w-96 h-8 bg-white px-2 focus:outline-none focus:ring-0 text-left"
+                                            value={temp}
+                                            onChange={(e) => setTemp(e.target.value)}
+                                            onBlur={() => finishEdit(k)}
+                                            autoFocus
+                                        />
+                                    ) : (
+                                        <span
+                                            className="flex items-center w-96 h-8 px-2 cursor-text text-left truncate whitespace-nowrap overflow-hidden"
+                                            onClick={() => startEdit(k)}
+                                            title={fmt(localData[k])}
+                                        >
+                                            {fmt(localData[k])}
+                                        </span>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
 
     return (
         <div className="flex flex-col h-full">
@@ -369,32 +462,25 @@ export default function JobCursorPage(props: any) {
                     <h1 className="text-xl font-bold">{job.title}</h1>
                     <TimeRemaining deadline={job.deadline} />
                 </div>
-                {shipmentData && (
+                {(shipmentData || n10Data) && (
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={async () => {
                             try {
-                                // Helper to flatten nested shipment object
-                                const flatten = (obj: any, prefix = ""): Record<string, unknown> => {
-                                    const res: Record<string, unknown> = {};
-                                    for (const [k, v] of Object.entries(obj)) {
-                                        const key = prefix ? `${prefix}_${k}` : k;
-                                        if (v !== null && typeof v === "object" && !Array.isArray(v)) {
-                                            Object.assign(res, flatten(v, key));
-                                        } else {
-                                            res[key] = v;
-                                        }
-                                    }
-                                    return res;
-                                };
-
-                                const flat = flatten(shipmentData);
+                                // Determine which data to export based on active tab
+                                const dataToExport = activeDataType === 'shipment' ? shipmentData : n10Data;
+                                const filePrefix = activeDataType === 'shipment' ? 'shipment' : 'n10';
+                                
+                                if (!dataToExport) {
+                                    alert("No data available for export");
+                                    return;
+                                }
 
                                 const resp = await fetch("/api/export-csv", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ data: shipmentData, jobTitle: job.title }),
+                                    body: JSON.stringify({ data: dataToExport, jobTitle: job.title }),
                                 });
                                 if (!resp.ok) {
                                     throw new Error("Failed to export CSV");
@@ -403,7 +489,7 @@ export default function JobCursorPage(props: any) {
                                 const url = URL.createObjectURL(blob);
                                 const link = document.createElement("a");
                                 link.href = url;
-                                link.download = `shipment_${job._id}.csv`;
+                                link.download = `${filePrefix}_${job._id}.csv`;
                                 document.body.appendChild(link);
                                 link.click();
                                 link.remove();
@@ -414,7 +500,7 @@ export default function JobCursorPage(props: any) {
                             }
                         }}
                     >
-                        Export CSV
+                        Export CSV ({activeDataType === 'shipment' ? 'Shipment' : 'N10'})
                     </Button>
                 )}
             </div>
@@ -464,43 +550,118 @@ export default function JobCursorPage(props: any) {
 
                 {/* Middle – output panel */}
                 <ResizablePanel defaultSize={50} minSize={35}>
-                    {(() => {
-                        const contentNode = shipmentData ? (
-                            <>
-                                <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
-                                <SectionEditor title="Consignor" sectionKey="consignor" keys={['company', 'address', 'city_state', 'country']} />
-                                <SectionEditor title="Consignee" sectionKey="consignee" keys={['company', 'address', 'city_state', 'country']} />
-                                <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
-                                <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
-                            </>
-                        ) : isExtracting ? (
-                            <>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <h3 className="font-semibold">Preparing extraction fields</h3>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <div className="flex flex-col h-full">
+                        {/* Data type switcher header - only show if both data types exist */}
+                        {shipmentData && n10Data && (
+                            <div className="p-2">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-gray-600">Document Type:</span>
+                                    <div className="flex bg-gray-100 rounded-lg p-1">
+                                        <button
+                                            onClick={() => setActiveDataType('shipment')}
+                                            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                                                activeDataType === 'shipment'
+                                                    ? 'bg-white text-blue-600 shadow-sm'
+                                                    : 'text-gray-600 hover:text-gray-800'
+                                            }`}
+                                        >
+                                            Shipment Registration
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveDataType('n10')}
+                                            className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                                                activeDataType === 'n10'
+                                                    ? 'bg-white text-blue-600 shadow-sm'
+                                                    : 'text-gray-600 hover:text-gray-800'
+                                            }`}
+                                        >
+                                            N10 Document
+                                        </button>
+                                    </div>
                                 </div>
-                                {[
-                                    { title: 'Mode', keys: ['transport', 'container', 'type'] },
-                                    { title: 'Consignor', keys: ['company', 'address', 'city_state', 'country'] },
-                                    { title: 'Consignee', keys: ['company', 'address', 'city_state', 'country'] },
-                                    { title: 'Details', keys: ['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs'] },
-                                    { title: 'Customs', keys: ['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis'] },
-                                ].map(section => (
-                                    <SectionPlaceholder key={section.title} title={section.title} keys={section.keys} />
-                                ))}
-                            </>
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-muted-foreground">
-                                Result will appear here...
                             </div>
-                        );
+                        )}
 
-                        return (
-                            <div className="p-4 h-full overflow-y-auto space-y-4 text-sm">
-                                {contentNode}
-                            </div>
-                        );
-                    })()}
+                        {/* Content area */}
+                        <div className="flex-1 overflow-y-auto">
+                            {(() => {
+                                // Determine what to show based on available data and active type
+                                const hasShipmentData = !!shipmentData;
+                                const hasN10Data = !!n10Data;
+                                
+                                // If both exist, show based on active type
+                                if (hasShipmentData && hasN10Data) {
+                                    if (activeDataType === 'shipment') {
+                                        return (
+                                            <div className="p-4 space-y-4 text-sm">
+                                                <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
+                                                <SectionEditor title="Consignor" sectionKey="consignor" keys={['company', 'address', 'city_state', 'country']} />
+                                                <SectionEditor title="Consignee" sectionKey="consignee" keys={['company', 'address', 'city_state', 'country']} />
+                                                <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
+                                                <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
+                                            </div>
+                                        );
+                                    } else {
+                                        return (
+                                            <div className="p-4 space-y-4 text-sm">
+                                                <N10DataEditor data={n10Data} />
+                                            </div>
+                                        );
+                                    }
+                                }
+                                
+                                // If only shipment data exists
+                                if (hasShipmentData && !hasN10Data) {
+                                    return (
+                                        <div className="p-4 space-y-4 text-sm">
+                                            <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
+                                            <SectionEditor title="Consignor" sectionKey="consignor" keys={['company', 'address', 'city_state', 'country']} />
+                                            <SectionEditor title="Consignee" sectionKey="consignee" keys={['company', 'address', 'city_state', 'country']} />
+                                            <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
+                                            <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
+                                        </div>
+                                    );
+                                }
+                                
+                                // If only N10 data exists
+                                if (!hasShipmentData && hasN10Data) {
+                                    return (
+                                        <div className="p-4 space-y-4 text-sm">
+                                            <N10DataEditor data={n10Data} />
+                                        </div>
+                                    );
+                                }
+                                
+                                // If extracting
+                                if (isExtracting) {
+                                    return (
+                                        <div className="p-4 space-y-4 text-sm">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <h3 className="font-semibold">Preparing extraction fields</h3>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            </div>
+                                            {[
+                                                { title: 'Mode', keys: ['transport', 'container', 'type'] },
+                                                { title: 'Consignor', keys: ['company', 'address', 'city_state', 'country'] },
+                                                { title: 'Consignee', keys: ['company', 'address', 'city_state', 'country'] },
+                                                { title: 'Details', keys: ['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs'] },
+                                                { title: 'Customs', keys: ['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis'] },
+                                            ].map(section => (
+                                                <SectionPlaceholder key={section.title} title={section.title} keys={section.keys} />
+                                            ))}
+                                        </div>
+                                    );
+                                }
+                                
+                                // Default: no data
+                                return (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                                        Result will appear here...
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
                 </ResizablePanel>
 
                 <ResizableHandle withHandle />

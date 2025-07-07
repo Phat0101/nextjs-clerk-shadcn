@@ -54,7 +54,9 @@ export default defineSchema({
     // Additional compiler progress data for persistence
     analysisResult: v.optional(v.any()),
     confirmedFields: v.optional(v.array(v.any())),
-    extractedData: v.optional(v.any()),
+    extractedData: v.optional(v.any()), // General purpose extracted data field
+    shipmentRegistrationExtractedData: v.optional(v.any()), // Specific to shipment registration
+    n10extractedData: v.optional(v.any()), // N10 document extracted data
     supplierName: v.optional(v.string()),
     templateFound: v.optional(v.boolean()),
   })

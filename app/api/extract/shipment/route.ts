@@ -168,13 +168,13 @@ export async function POST(request: NextRequest) {
     async function persistPartial(partialData: unknown) {
         if (!jobId) return;
         try {
-            await fetchAction(convexApi.jobs.saveExtractedData, {
+            await fetchAction(convexApi.jobs.saveShipmentRegistrationExtractedData, {
                 jobId,
                 data: partialData,
             });
         } catch (err) {
             // eslint-disable-next-line no-console
-            console.error('Failed to save extracted data', err);
+            console.error('Failed to save shipment registration extracted data', err);
         }
     }
 

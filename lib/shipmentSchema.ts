@@ -1,3 +1,4 @@
+// Shipment schema enums for use across the application
 export const TRANSPORT_ENUM = ['SEA', 'AIR', 'FSA', 'FAS', 'RAI', 'COU'] as const;
 export const CONTAINER_ENUM = ['FCL', 'LCL', 'BLK', 'EBK', 'BCN', 'SCN', 'HCK', 'MCK'] as const;
 export const TYPE_ENUM = ['STD', 'CLM', 'BCL', 'BCN', 'HVL', 'HCK', 'SCN'] as const;

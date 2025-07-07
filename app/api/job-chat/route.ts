@@ -154,7 +154,7 @@ export async function POST(req: Request) {
   });
 
   const seedMessage = fileParts.length
-    ? [{ role: 'user', content: [{ type: 'text', text: `Please extract shipment data from these ${fileParts.length} document(s). Use the extract_shipment tool ONCE to structure all the data, then provide a summary. Do not call the tool multiple times.` }, ...fileParts] }]
+    ? [{ role: 'user', content: [{ type: 'text', text: `Please analyze these ${fileParts.length} document(s) and extract the relevant data. Wait for my specific instructions on which extraction workflow to use (shipment registration or N10).` }, ...fileParts] }]
     : [];
 
   const messages = [...seedMessage, ...clientMessages];
@@ -242,7 +242,7 @@ export async function POST(req: Request) {
         const sectionData = params; // alias with semantic name
         const partial = { [key]: sectionData };
         console.log(`🔧 ${name} called`, partial);
-        await fetchAction((convexApi as any).jobs.saveExtractedDataPartial, {
+        await fetchAction((convexApi as any).jobs.saveShipmentRegistrationExtractedDataPartial, {
           jobId: jobId as Id<'jobs'>,
           partial,
         });
@@ -257,40 +257,78 @@ export async function POST(req: Request) {
   const extractDetails = createPartialTool('extract_details', 'details', detailsSchema);
   const extractCustoms = createPartialTool('extract_customs', 'customs_fields', customsSchema);
 
+  // N10 extraction tool - single comprehensive tool for N10 document data
+  const n10Schema = z.object({
+    // N10 specific fields - customize based on your N10 document structure
+    document_number: z.string().nullable().optional(),
+    document_date: z.string().nullable().optional(),
+    reference_number: z.string().nullable().optional(),
+    sender_name: z.string().nullable().optional(),
+    sender_address: z.string().nullable().optional(),
+    receiver_name: z.string().nullable().optional(),
+    receiver_address: z.string().nullable().optional(),
+    cargo_description: z.string().nullable().optional(),
+    weight: z.number().nullable().optional(),
+    weight_unit: z.string().nullable().optional(),
+    dimensions: z.string().nullable().optional(),
+    special_instructions: z.string().nullable().optional(),
+    customs_declaration: z.string().nullable().optional(),
+    value_amount: z.number().nullable().optional(),
+    value_currency: z.string().nullable().optional(),
+    // Add more N10-specific fields as needed
+  });
+
+  const extractN10 = tool({
+    description: `Extract N10 document data. This tool extracts comprehensive information from N10 customs/logistics documents. Provide values for all available fields from the document.`,
+    parameters: n10Schema,
+    execute: async function (params: any) {
+      console.log('🔧 extract_n10 called', params);
+      await fetchAction((convexApi as any).jobs.saveN10ExtractedData, {
+        jobId: jobId as Id<'jobs'>,
+        data: params,
+      });
+      return { extracted: params };
+    },
+  });
+
   const result = streamText({
     model: google('gemini-2.5-pro'),
-    system: `You are a shipment data extraction specialist. Your task is to extract structured data from shipment documents.
+    system: `You are a document data extraction specialist. Your task is to extract structured data from logistics and customs documents.
 
-CRITICAL: Use the extract_shipment tool EXACTLY ONCE to extract all data, then provide a brief summary. Do not call the tool multiple times.
+WORKFLOW SELECTION:
+Listen carefully to the user's request to determine which extraction workflow to use:
 
-CRITICAL: You have FIVE separate tools – extract_mode, extract_consignor, extract_consignee, extract_details, extract_customs.
-You MUST call EACH of these tools exactly once to fully register a shipment. The recommended order is:
+**USER REQUESTS "SHIPMENT" OR "SHIPMENT REGISTRATION":**
+Use the 5-tool shipment workflow: extract_mode, extract_consignor, extract_consignee, extract_details, extract_customs.
+Call EACH tool exactly once in this recommended order:
   1. extract_mode – identify transport/container/type
   2. extract_consignor – consignor company/address/etc.
   3. extract_consignee – consignee company/address/etc.
   4. extract_customs – customs & AQIS fields
   5. extract_details – routing, weights, packages, commercial terms
 
-Strict rules:
-• Call every tool once. Missing a tool is unacceptable.
-• Never call a tool twice.
-• After the 5th tool call, return \`DONE\` followed by a concise Markdown summary.
-• Do NOT output raw JSON – the UI will render results.
+**USER REQUESTS "N10" OR MENTIONS "N10 EXTRACTION":**
+Use the single extract_n10 tool to extract all relevant data in one call.
+The N10 tool can be used on ANY document type when the user specifically requests N10 extraction.
+Extract whatever relevant information is available from the provided documents.
 
-WORKFLOW:
-1. Analyze ALL provided documents
-2. Call the tools in the order above, waiting for each result before the next.
-3. After completing all five calls, respond with \`DONE\` + summary and STOP
+**USER PROVIDES NO SPECIFIC REQUEST:**
+Default to shipment registration workflow (5 tools) for general logistics documents.
+
+IMPORTANT NOTES:
+• User intent overrides document type detection
+• If user says "extract N10" or "for N10 extraction", use the N10 tool regardless of document type
+• If user says "extract shipment data", use the 5-tool workflow
+• Never mix workflows or call tools from different workflows
+• After completing the appropriate workflow, return \`DONE\` + summary
 
 EXTRACTION RULES:
 - Extract exact values from documents when clearly visible
 - For missing fields, use null/empty values
 - Dates must be in YYYY-MM-DD format
 - Numbers should be numeric values without formatting
-- Analyze document context to deduce transport mode, container type, etc.
-- Summarize goods description concisely
-
-After calling the tool once, your job is complete.`,
+- Analyze document context to deduce values when appropriate
+- Be flexible and extract relevant information even if document format doesn't perfectly match the expected type`,
     messages,
     temperature: 0,
     maxSteps: 12,
@@ -302,6 +340,7 @@ After calling the tool once, your job is complete.`,
       extract_consignee: extractConsignee,
       extract_details: extractDetails,
       extract_customs: extractCustoms,
+      extract_n10: extractN10,
     },
     onFinish: async ({ response, usage }) => {
       try {
