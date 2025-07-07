@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import TimeRemaining from "@/components/TimeRemaining";
 import { CheckCircle, AlertCircle, Loader2, FileText, Info } from "lucide-react";
@@ -117,6 +117,8 @@ export default function JobCursorPage(props: any) {
         input: chatInput,
         handleInputChange,
         handleSubmit,
+        isLoading,
+        append,
     } = useChat({
         api: "/api/job-chat",
         initialMessages: initialChatMessages,
@@ -137,6 +139,7 @@ export default function JobCursorPage(props: any) {
     const [n10Data, setN10Data] = useState<any | null>(null);
     const [isExtracting, setIsExtracting] = useState(false);
     const [activeDataType, setActiveDataType] = useState<'shipment' | 'n10'>('shipment');
+    const [extractionType, setExtractionType] = useState<'shipment' | 'n10' | null>(null);
 
     // Mention/autocomplete state
     const [mentionActive, setMentionActive] = useState(false);
@@ -169,19 +172,68 @@ export default function JobCursorPage(props: any) {
 
         const { job } = jobDetails;
 
-        // If compiler is currently in the "extracting" step and we don't yet have any extracted data → show placeholder
         if (job.compilerStep === 'extracting' && !job.shipmentRegistrationExtractedData && !job.n10extractedData) {
             setIsExtracting(true);
-        } else {
+
+            // Check chat history to determine which extraction is likely running
+            let detectedType: 'shipment' | 'n10' | null = null;
+            // Iterate backwards through messages to find the most recent tool call
+            for (const message of [...chatMessages].reverse()) {
+                if (message.toolInvocations) {
+                    for (const ti of message.toolInvocations) {
+                        if (ti.toolName?.startsWith('extract_n10_')) {
+                            detectedType = 'n10';
+                            break;
+                        }
+                        if (ti.toolName?.startsWith('extract_')) {
+                            detectedType = 'shipment';
+                            break;
+                        }
+                    }
+                }
+                if (detectedType) break;
+            }
+            setExtractionType(detectedType);
+            } else {
             setIsExtracting(false);
+            setExtractionType(null);
         }
-    }, [jobDetails]);
+    }, [jobDetails, chatMessages]);
 
     // Handle chat submit to include queued file URLs
     const onChatSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        handleSubmit(e, { body: { jobId, fileUrls: queuedFileUrls } });
-        // keep attachments so they show in chat; will clear when user manually removes
+        if (isLoading || !chatInput.trim()) return;
+        
+        append(
+            { role: 'user', content: chatInput, fileUrls: queuedFileUrls } as any,
+            { body: { jobId, fileUrls: queuedFileUrls } }
+        );
+
+        setChatInput('');
+        setQueuedFileUrls([]);
+    };
+
+    // Handler for quick action buttons
+    const handleQuickAction = async (prompt: string) => {
+        if (isLoading) return;
+        await append(
+            { role: 'user', content: prompt, fileUrls: queuedFileUrls } as any,
+            { body: { jobId, fileUrls: queuedFileUrls } }
+        );
+        setQueuedFileUrls([]);
+    };
+
+    // Attaches all available files to the chat
+    const attachAllFiles = () => {
+        const allUrls = displayFiles.map(f => f.fileUrl).filter((url): url is string => !!url);
+        // Add only urls that are not already queued
+        const newUrls = allUrls.filter(url => !queuedFileUrls.includes(url));
+        setQueuedFileUrls(prev => [...prev, ...newUrls]);
+
+        const cleaned = chatInput.replace(/@([^\s]*)$/, '').trimEnd();
+        setChatInput((cleaned + ' ').trimEnd());
+        setMentionActive(false);
     };
 
     // When user drags a file onto chat or clicks attach
@@ -209,9 +261,19 @@ export default function JobCursorPage(props: any) {
 
     // suggestions computed
     const mentionSuggestions = useMemo(() => {
-        if (!mentionActive) return [] as JobFile[];
+        if (!mentionActive) return [] as (JobFile & { isAll?: boolean })[];
         const q = mentionQuery.toLowerCase();
-        return displayFiles.filter(f => f.fileName.toLowerCase().includes(q));
+        
+        const allFilesAndRegularFiles: (JobFile & { isAll?: boolean })[] = [...displayFiles];
+        if (displayFiles.length > 1) {
+            allFilesAndRegularFiles.unshift({
+                _id: 'all-files-pseudo-id',
+                fileName: 'All Files',
+                isAll: true,
+            });
+        }
+        
+        return allFilesAndRegularFiles.filter(f => f.fileName.toLowerCase().includes(q));
     }, [mentionActive, mentionQuery, displayFiles]);
 
     // input change handler wrapper
@@ -242,8 +304,14 @@ export default function JobCursorPage(props: any) {
                 setMentionIndex((mentionIndex - 1 + mentionSuggestions.length) % mentionSuggestions.length);
             } else if (e.key === 'Enter' || e.key === 'Tab') {
                 e.preventDefault();
-                const file = mentionSuggestions[mentionIndex];
-                if (file) attachFile(file.fileUrl || '', file.fileName);
+                const selection = mentionSuggestions[mentionIndex];
+                if (selection) {
+                    if (selection.isAll) {
+                        attachAllFiles();
+                    } else {
+                        attachFile(selection.fileUrl || '', selection.fileName);
+                    }
+                }
             } else if (e.key === 'Escape') {
                 setMentionActive(false);
             }
@@ -307,7 +375,7 @@ export default function JobCursorPage(props: any) {
             // persist
             try {
                 await updateStep({ jobId, step: 'extracting', shipmentRegistrationExtractedData: merged });
-            } catch (err) {
+        } catch (err) {
                 console.error('save edit failed', err);
             }
             setEditing(null);
@@ -354,6 +422,120 @@ export default function JobCursorPage(props: any) {
         );
     };
 
+    // New generic editor for N10 data, handles nested objects
+    const N10ObjectEditor = ({ title, data, keys, onUpdate }: { title: string; data: any; keys: string[]; onUpdate: (newData: any) => void }) => {
+        const [localData, setLocalData] = useLocalState<Record<string, any>>(data || {});
+        const [editing, setEditing] = useLocalState<string | null>(null);
+        const [temp, setTemp] = useLocalState('');
+    
+        useLocalEffect(() => {
+            setLocalData(data || {});
+        }, [data]);
+    
+        const getNested = (obj: any, path: string) => path.split('.').reduce((o, i) => (o ? o[i] : null), obj);
+    
+        const setNested = (obj: any, path: string, value: any) => {
+            const keys = path.split('.');
+            let current = obj;
+            for (let i = 0; i < keys.length - 1; i++) {
+                if (current[keys[i]] === undefined || current[keys[i]] === null) {
+                    current[keys[i]] = {};
+                }
+                current = current[keys[i]];
+            }
+            current[keys[keys.length - 1]] = value;
+            return obj;
+        };
+    
+        const startEdit = (k: string) => {
+            setEditing(k);
+            setTemp(String(getNested(localData, k) ?? ''));
+        };
+    
+        const finishEdit = async (k: string) => {
+            const newVal = temp.trim() === '' ? null : temp;
+            const updated = setNested({ ...localData }, k, newVal);
+            setLocalData(updated);
+            onUpdate(updated); // Callback to update parent state
+            setEditing(null);
+        };
+    
+        const fmt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
+    
+        return (
+            <Card className="p-0 gap-0 border-0 shadow-none">
+                <h1 className="p-2 font-medium text-sm">{title}</h1>
+                <CardContent className="p-2">
+                    <table className="min-w-full table-fixed border border-gray-200 text-xs">
+                        <colgroup>
+                            <col style={{ width: '35%' }} />
+                            <col style={{ width: '65%' }} />
+                        </colgroup>
+                        <tbody>
+                            {keys.map((k) => (
+                                <tr key={k} className="border-b last:border-b-0">
+                                    <td className="px-2 py-1 border-r bg-gray-50 font-medium whitespace-nowrap h-8 align-middle text-left truncate">{k}</td>
+                                    <td className="px-0 h-8 align-middle text-left">
+                                        {editing === k ? (
+                                            <input
+                                                className="w-96 h-8 bg-white px-2 focus:outline-none focus:ring-0 text-left"
+                                                value={temp}
+                                                onChange={(e) => setTemp(e.target.value)}
+                                                onBlur={() => finishEdit(k)}
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <span
+                                                className="flex items-center w-96 h-8 px-2 cursor-text text-left truncate whitespace-nowrap overflow-hidden"
+                                                onClick={() => startEdit(k)}
+                                                title={fmt(getNested(localData, k))}
+                                            >
+                                                {fmt(getNested(localData, k))}
+                                            </span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </CardContent>
+            </Card>
+        );
+    };
+
+    // Read-only viewer for goods declaration list
+    const N10GoodsDeclarationViewer = ({ items }: { items: any[] }) => {
+        if (!items || items.length === 0) return null;
+        const headers = Object.keys(items[0]);
+        return (
+            <Card className="p-0 gap-0 border-0 shadow-none">
+                <h1 className="p-2 font-medium text-sm">Goods Declaration</h1>
+                <CardContent className="p-2">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-xs">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    {headers.map(key => (
+                                        <th key={key} className="p-2 text-left font-medium truncate">{key}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {items.map((item: any, index: number) => (
+                                    <tr key={index} className="border-t">
+                                        {headers.map(header => (
+                                            <td key={`${index}-${header}`} className="p-2 truncate">{String(item[header] ?? '—')}</td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    };
+    
     // Skeleton placeholder table used during extraction
     const SectionPlaceholder = ({ title, keys }: { title: string; keys: string[] }) => (
         <div className="mb-4">
@@ -372,86 +554,32 @@ export default function JobCursorPage(props: any) {
                     ))}
                 </tbody>
             </table>
-        </div>
-    );
-
-    // N10 data editor component
-    const N10DataEditor = ({ data }: { data: any }) => {
-        const [localData, setLocalData] = useLocalState<Record<string, any>>(data || {});
-        const [editing, setEditing] = useLocalState<string | null>(null);
-        const [temp, setTemp] = useLocalState('');
-
-        // Keep localData in sync if n10Data updates externally
-        useLocalEffect(() => {
-            console.log('🔄 N10 data updating:', data);
-            setLocalData(data || {});
-        }, [data]);
-
-        const startEdit = (k: string) => {
-            setEditing(k);
-            setTemp(String(localData[k] ?? ''));
-        };
-
-        const finishEdit = async (k: string) => {
-            const newVal = temp.trim() === '' ? null : temp;
-            const updated = { ...localData, [k]: newVal };
-            setLocalData(updated);
-            setN10Data(updated);
-            // persist
-            try {
-                await updateStep({ jobId, step: 'extracting', n10extractedData: updated });
-            } catch (err) {
-                console.error('save N10 edit failed', err);
-            }
-            setEditing(null);
-        };
-
-        const fmt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
-
-        const n10Fields = [
-            'document_number', 'document_date', 'reference_number',
-            'sender_name', 'sender_address', 'receiver_name', 'receiver_address',
-            'cargo_description', 'weight', 'weight_unit', 'dimensions',
-            'special_instructions', 'customs_declaration', 'value_amount', 'value_currency'
-        ];
-
-        return (
-            <div className="mb-4">
-                <h4 className="font-medium mb-1">N10 Document Data</h4>
-                <table className="min-w-full table-fixed border border-gray-200 text-xs">
-                    <colgroup>
-                        <col style={{ width: '35%' }} />
-                        <col style={{ width: '65%' }} />
-                    </colgroup>
-                    <tbody>
-                        {n10Fields.map((k) => (
-                            <tr key={k} className="border-b last:border-b-0">
-                                <td className="px-2 py-1 border-r bg-gray-50 font-medium whitespace-nowrap h-8 align-middle text-left truncate">{k}</td>
-                                <td className="px-0 h-8 align-middle text-left">
-                                    {editing === k ? (
-                                        <input
-                                            className="w-96 h-8 bg-white px-2 focus:outline-none focus:ring-0 text-left"
-                                            value={temp}
-                                            onChange={(e) => setTemp(e.target.value)}
-                                            onBlur={() => finishEdit(k)}
-                                            autoFocus
-                                        />
-                                    ) : (
-                                        <span
-                                            className="flex items-center w-96 h-8 px-2 cursor-text text-left truncate whitespace-nowrap overflow-hidden"
-                                            onClick={() => startEdit(k)}
-                                            title={fmt(localData[k])}
-                                        >
-                                            {fmt(localData[k])}
-                                        </span>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
             </div>
         );
+
+    const shipmentPlaceholderSections = [
+        { title: 'Mode', keys: ['transport', 'container', 'type'] },
+        { title: 'Consignor', keys: ['company', 'address', 'city_state', 'country'] },
+        { title: 'Consignee', keys: ['company', 'address', 'city_state', 'country'] },
+        { title: 'Details', keys: ['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs'] },
+        { title: 'Customs', keys: ['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis'] },
+    ];
+    
+    const n10PlaceholderSections = [
+        { title: 'Declaration Header', keys: ['ownerReference', 'valuationDate', 'eftPaymentIndicator'] },
+        { title: 'Owner Details', keys: ['abn', 'name', 'address.street', 'contact.email'] },
+        { title: 'Sender Details', keys: ['name', 'address.street', 'supplierId.ccid'] },
+        { title: 'Transport Information', keys: ['modeOfTransport', 'firstArrivalDate', 'grossWeight', 'numberOfPackages'] },
+        { title: 'Goods Declaration', keys: ['lineNumber', 'goodsDescription', 'tariffClassificationNumber', 'quantity', 'price'] },
+        { title: 'Declaration Statement', keys: ['name', 'date', 'isOwner'] },
+    ];
+
+    const n10FieldKeys = {
+        declarationHeader: ['ownerReference', 'biosecurityInspectionLocation', 'valuationDate', 'headerValuationAdviceNumber', 'eftPaymentIndicator'],
+        ownerDetails: ['abn', 'cac', 'ccid', 'name', 'address.street', 'address.city', 'address.state', 'address.postcode', 'contact.phone', 'contact.mobile', 'contact.fax', 'contact.email'],
+        senderDetails: ['name', 'address.street', 'address.city', 'address.state', 'address.postcode', 'supplierId.ccid', 'supplierId.abn', 'vendorId.abn', 'vendorId.arn'],
+        transportInformation: ['modeOfTransport', 'firstArrivalDate', 'grossWeight', 'grossWeightUnit', 'numberOfPackages', 'marksAndNumbersDescription', 'loadingPort', 'dischargePort', 'sea.vesselName', 'sea.vesselId', 'sea.voyageNumber', 'sea.firstArrivalPort', 'sea.cargoType', 'sea.containerNumber', 'sea.oceanBillOfLadingNumber', 'sea.houseBillOfLadingNumber', 'air.masterAirWaybillNumber', 'air.houseAirWaybillNumber', 'post.parcelPostCardNumber', 'other.departmentReceiptForGoodsNumber'],
+        declarationStatement: ['declarationStatement.name', 'declarationStatement.signature', 'declarationStatement.date', 'declarationStatement.isOwner', 'declarationStatement.isAgent', 'amberStatement.reasonForUncertainty'],
     };
 
     return (
@@ -510,13 +638,13 @@ export default function JobCursorPage(props: any) {
                 <ResizablePanel defaultSize={25} minSize={15}>
                     <ResizablePanelGroup direction="vertical" className="h-full">
                         {/* File list */}
-                        <ResizablePanel defaultSize={20} minSize={15}>
+                <ResizablePanel defaultSize={20} minSize={15}>
                             <div className="flex flex-col h-full">
                                 {/* File list header */}
                                 <div className="p-3 space-y-2 overflow-y-auto max-h-44 text-sm">
                                     <div className="flex justify-between items-center">
                                         <p className="font-medium">Job Files (drag into chat)</p>
-                                    </div>
+                                        </div>
                                     {displayFiles.map((file, idx) => (
                                         <div
                                             key={file._id}
@@ -527,13 +655,13 @@ export default function JobCursorPage(props: any) {
                                             onDoubleClick={() => attachFile(file.fileUrl || "", file.fileName)}
                                         >
                                             {file.fileName}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </ResizablePanel>
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+                </ResizablePanel>
 
-                        <ResizableHandle withHandle />
+                <ResizableHandle withHandle />
 
                         {/* Document preview */}
                         <ResizablePanel defaultSize={80} minSize={50}>
@@ -557,7 +685,7 @@ export default function JobCursorPage(props: any) {
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium text-gray-600">Document Type:</span>
                                     <div className="flex bg-gray-100 rounded-lg p-1">
-                                        <button
+                                <button
                                             onClick={() => setActiveDataType('shipment')}
                                             className={`px-3 py-1 text-xs rounded-md transition-colors ${
                                                 activeDataType === 'shipment'
@@ -566,8 +694,8 @@ export default function JobCursorPage(props: any) {
                                             }`}
                                         >
                                             Shipment Registration
-                                        </button>
-                                        <button
+                                </button>
+                                <button
                                             onClick={() => setActiveDataType('n10')}
                                             className={`px-3 py-1 text-xs rounded-md transition-colors ${
                                                 activeDataType === 'n10'
@@ -576,10 +704,10 @@ export default function JobCursorPage(props: any) {
                                             }`}
                                         >
                                             N10 Document
-                                        </button>
-                                    </div>
-                                </div>
+                                </button>
                             </div>
+                                                                </div>
+                                                                </div>
                         )}
 
                         {/* Content area */}
@@ -599,14 +727,28 @@ export default function JobCursorPage(props: any) {
                                                 <SectionEditor title="Consignee" sectionKey="consignee" keys={['company', 'address', 'city_state', 'country']} />
                                                 <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
                                                 <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
-                                            </div>
+                                                                </div>
                                         );
                                     } else {
+                                        const handleUpdate = async (sectionKey: string, updatedSectionData: any) => {
+                                            const updatedN10Data = { ...n10Data, [sectionKey]: updatedSectionData };
+                                            setN10Data(updatedN10Data);
+                                            try {
+                                                await updateStep({ jobId, step: 'extracting', n10extractedData: updatedN10Data });
+                                            } catch (err) {
+                                                console.error('save N10 edit failed', err);
+                                            }
+                                        };
                                         return (
                                             <div className="p-4 space-y-4 text-sm">
-                                                <N10DataEditor data={n10Data} />
+                                                <N10ObjectEditor title="Declaration Header" data={n10Data?.declarationHeader} keys={n10FieldKeys.declarationHeader} onUpdate={(d) => handleUpdate('declarationHeader', d)} />
+                                                <N10ObjectEditor title="Owner Details" data={n10Data?.ownerDetails} keys={n10FieldKeys.ownerDetails} onUpdate={(d) => handleUpdate('ownerDetails', d)} />
+                                                <N10ObjectEditor title="Sender Details" data={n10Data?.senderDetails} keys={n10FieldKeys.senderDetails} onUpdate={(d) => handleUpdate('senderDetails', d)} />
+                                                <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
+                                                <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
+                                                <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({...n10Data, ...d})} />
                                             </div>
-                                        );
+                                         );
                                     }
                                 }
                                 
@@ -619,34 +761,45 @@ export default function JobCursorPage(props: any) {
                                             <SectionEditor title="Consignee" sectionKey="consignee" keys={['company', 'address', 'city_state', 'country']} />
                                             <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
                                             <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
-                                        </div>
+                                </div>
                                     );
                                 }
                                 
                                 // If only N10 data exists
                                 if (!hasShipmentData && hasN10Data) {
-                                    return (
-                                        <div className="p-4 space-y-4 text-sm">
-                                            <N10DataEditor data={n10Data} />
-                                        </div>
-                                    );
+                                    const handleUpdate = async (sectionKey: string, updatedSectionData: any) => {
+                                        const updatedN10Data = { ...n10Data, [sectionKey]: updatedSectionData };
+                                        setN10Data(updatedN10Data);
+                                        try {
+                                            await updateStep({ jobId, step: 'extracting', n10extractedData: updatedN10Data });
+                                        } catch (err) {
+                                            console.error('save N10 edit failed', err);
+                                        }
+                                    };
+                                     return (
+                                         <div className="p-4 space-y-4 text-sm">
+                                             <N10ObjectEditor title="Declaration Header" data={n10Data?.declarationHeader} keys={n10FieldKeys.declarationHeader} onUpdate={(d) => handleUpdate('declarationHeader', d)} />
+                                             <N10ObjectEditor title="Owner Details" data={n10Data?.ownerDetails} keys={n10FieldKeys.ownerDetails} onUpdate={(d) => handleUpdate('ownerDetails', d)} />
+                                             <N10ObjectEditor title="Sender Details" data={n10Data?.senderDetails} keys={n10FieldKeys.senderDetails} onUpdate={(d) => handleUpdate('senderDetails', d)} />
+                                             <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
+                                             <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
+                                             <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({...n10Data, ...d})} />
+                                         </div>
+                                     );
                                 }
                                 
                                 // If extracting
                                 if (isExtracting) {
+                                    const sections = extractionType === 'n10' ? n10PlaceholderSections : shipmentPlaceholderSections;
+                                    const title = extractionType === 'n10' ? 'Extracting N10 Document...' : 'Extracting Shipment Data...';
+                                    
                                     return (
                                         <div className="p-4 space-y-4 text-sm">
                                             <div className="flex items-center gap-2 mb-2">
-                                                <h3 className="font-semibold">Preparing extraction fields</h3>
+                                                <h3 className="font-semibold">{title}</h3>
                                                 <Loader2 className="w-4 h-4 animate-spin" />
                                             </div>
-                                            {[
-                                                { title: 'Mode', keys: ['transport', 'container', 'type'] },
-                                                { title: 'Consignor', keys: ['company', 'address', 'city_state', 'country'] },
-                                                { title: 'Consignee', keys: ['company', 'address', 'city_state', 'country'] },
-                                                { title: 'Details', keys: ['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs'] },
-                                                { title: 'Customs', keys: ['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis'] },
-                                            ].map(section => (
+                                            {sections.map(section => (
                                                 <SectionPlaceholder key={section.title} title={section.title} keys={section.keys} />
                                             ))}
                                         </div>
@@ -657,11 +810,11 @@ export default function JobCursorPage(props: any) {
                                 return (
                                     <div className="h-full flex items-center justify-center text-muted-foreground">
                                         Result will appear here...
-                                    </div>
+                                            </div>
                                 );
                             })()}
-                        </div>
-                    </div>
+                                        </div>
+                            </div>
                 </ResizablePanel>
 
                 <ResizableHandle withHandle />
@@ -684,7 +837,7 @@ export default function JobCursorPage(props: any) {
                                 <div key={m.id || idx} className="space-y-1 text-sm">
                                     <div className="font-semibold text-gray-500">
                                         {m.role === "user" ? "You" : "AI"}
-                                    </div>
+                            </div>
                                     {/* Render each part according to its type */}
                                     {m.parts?.map((part: any, idx: number) => {
                                         if (part.type === 'text' && typeof part.text === 'string') {
@@ -721,16 +874,16 @@ export default function JobCursorPage(props: any) {
                                                     const name = f?.fileName || 'file';
                                                     return <FilePill key={u} name={name} />;
                                                 })}
-                                            </div>
+                                </div>
                                         );
                                     })()}
                                     {/* Display tool invocation result if available */}
                                     {m.toolInvocations?.map((ti: any) => (
                                         <ToolInvocationDisplay key={ti.toolCallId} invocation={ti} />
                                     ))}
-                                </div>
-                            ))}
                         </div>
+                            ))}
+                            </div>
 
                         {/* Input */}
                         <form onSubmit={onChatSubmit} className="p-3 border-t flex flex-col gap-2 relative">
@@ -740,16 +893,39 @@ export default function JobCursorPage(props: any) {
                                     {queuedFileUrls.map((u) => {
                                         const f = displayFiles.find(f => f.fileUrl === u);
                                         const name = f?.fileName || 'file';
-                                        return (
+                                            return (
                                             <span key={u} className="flex items-center gap-1 bg-gray-200 text-gray-800 rounded-full px-2 py-0.5 text-xs">
                                                 <FileText className="w-3 h-3" />
                                                 {name}
                                                 <button type="button" onClick={() => setQueuedFileUrls(prev => prev.filter(x => x !== u))} className="ml-1 text-gray-500 hover:text-gray-700">×</button>
                                             </span>
-                                        );
-                                    })}
-                                </div>
+                                            );
+                                        })}
+                                    </div>
                             )}
+                            {/* Quick Action Buttons */}
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    type="button"
+                                    className="text-xs h-7"
+                                    onClick={() => handleQuickAction('Extract for shipment')}
+                                    disabled={isLoading}
+                                >
+                                    Extract for Shipment
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    type="button"
+                                    className="text-xs h-7"
+                                    onClick={() => handleQuickAction('Extract for N10')}
+                                    disabled={isLoading}
+                                >
+                                    Extract for N10
+                                </Button>
+                            </div>
                             <div className="flex items-center gap-2">
                                 <input
                                     className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -766,10 +942,10 @@ export default function JobCursorPage(props: any) {
                                     }}
                                     ref={inputRef}
                                 />
-                                <Button type="submit" size="sm">
-                                    Send
-                                </Button>
-                            </div>
+                                <Button type="submit" size="sm" disabled={isLoading || !chatInput.trim()}>
+                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
+                                    </Button>
+                                </div>
 
                             {/* mention dropdown */}
                             {mentionActive && mentionSuggestions.length > 0 && (
@@ -777,11 +953,18 @@ export default function JobCursorPage(props: any) {
                                     {mentionSuggestions.map((file, idx) => (
                                         <div key={file._id}
                                             className={`px-2 py-1 cursor-pointer ${idx === mentionIndex ? 'bg-blue-600 text-white' : 'hover:bg-gray-100'}`}
-                                            onMouseDown={(e) => { e.preventDefault(); attachFile(file.fileUrl || '', file.fileName); }}
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                if (file.isAll) {
+                                                    attachAllFiles();
+                                                } else {
+                                                    attachFile(file.fileUrl || '', file.fileName);
+                                                }
+                                            }}
                                         >{file.fileName}</div>
                                     ))}
-                                </div>
-                            )}
+                        </div>
+                    )}
                         </form>
                     </div>
                 </ResizablePanel>

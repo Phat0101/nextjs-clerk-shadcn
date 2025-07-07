@@ -2,7 +2,7 @@
 import { streamText, tool } from 'ai';
 import { fetchMutation, fetchAction } from 'convex/nextjs';
 import { api as convexApi } from '@/convex/_generated/api';
-import { google } from '@ai-sdk/google';
+import { google, GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 // import { anthropic } from '@ai-sdk/anthropic';
 import { Id } from '@/convex/_generated/dataModel';
 import {
@@ -258,41 +258,170 @@ export async function POST(req: Request) {
   const extractCustoms = createPartialTool('extract_customs', 'customs_fields', customsSchema);
 
   // N10 extraction tool - single comprehensive tool for N10 document data
-  const n10Schema = z.object({
-    // N10 specific fields - customize based on your N10 document structure
-    document_number: z.string().nullable().optional(),
-    document_date: z.string().nullable().optional(),
-    reference_number: z.string().nullable().optional(),
-    sender_name: z.string().nullable().optional(),
-    sender_address: z.string().nullable().optional(),
-    receiver_name: z.string().nullable().optional(),
-    receiver_address: z.string().nullable().optional(),
-    cargo_description: z.string().nullable().optional(),
-    weight: z.number().nullable().optional(),
-    weight_unit: z.string().nullable().optional(),
-    dimensions: z.string().nullable().optional(),
-    special_instructions: z.string().nullable().optional(),
-    customs_declaration: z.string().nullable().optional(),
-    value_amount: z.number().nullable().optional(),
-    value_currency: z.string().nullable().optional(),
-    // Add more N10-specific fields as needed
+  const declarationHeaderSchema = z.object({
+    declarationHeader: z.object({
+      ownerReference: z.string().nullable().optional(),
+      biosecurityInspectionLocation: z.string().nullable().optional(),
+      valuationDate: z.string().describe("YYYY-MM-DD").nullable().optional(),
+      headerValuationAdviceNumber: z.string().nullable().optional(),
+      eftPaymentIndicator: z.boolean().nullable().optional(),
+    }).describe("Header information for the declaration.").nullable().optional(),
   });
 
-  const extractN10 = tool({
-    description: `Extract N10 document data. This tool extracts comprehensive information from N10 customs/logistics documents. Provide values for all available fields from the document.`,
-    parameters: n10Schema,
-    execute: async function (params: any) {
-      console.log('🔧 extract_n10 called', params);
-      await fetchAction((convexApi as any).jobs.saveN10ExtractedData, {
-        jobId: jobId as Id<'jobs'>,
-        data: params,
-      });
-      return { extracted: params };
-    },
+  const ownerDetailsSchema = z.object({
+    ownerDetails: z.object({
+      abn: z.string().nullable().optional(),
+      cac: z.string().nullable().optional(),
+      ccid: z.string().nullable().optional(),
+      name: z.string().nullable().optional(),
+      address: z.object({
+        street: z.string().nullable().optional(),
+        city: z.string().nullable().optional(),
+        state: z.string().nullable().optional(),
+        postcode: z.string().nullable().optional(),
+      }).nullable().optional(),
+      contact: z.object({
+        phone: z.string().nullable().optional(),
+        mobile: z.string().nullable().optional(),
+        fax: z.string().nullable().optional(),
+        email: z.string().nullable().optional(),
+      }).nullable().optional(),
+    }).describe("Details of the owner.").nullable().optional(),
   });
+
+  const senderDetailsSchema = z.object({
+    senderDetails: z.object({
+      name: z.string().nullable().optional(),
+      address: z.object({
+        street: z.string().nullable().optional(),
+        city: z.string().nullable().optional(),
+        state: z.string().nullable().optional(),
+        postcode: z.string().nullable().optional(),
+      }).nullable().optional(),
+      supplierId: z.object({
+        ccid: z.string().nullable().optional(),
+        abn: z.string().nullable().optional(),
+      }).nullable().optional(),
+      vendorId: z.object({
+        abn: z.string().nullable().optional(),
+        arn: z.string().nullable().optional(),
+      }).nullable().optional(),
+    }).describe("Details of the sender.").nullable().optional(),
+  });
+
+  const transportInformationSchema = z.object({
+    transportInformation: z.object({
+      modeOfTransport: z.enum(["Sea", "Air", "Post", "Other"]).nullable().optional(),
+      firstArrivalDate: z.string().describe("YYYY-MM-DD").nullable().optional(),
+      grossWeight: z.number().nullable().optional(),
+      grossWeightUnit: z.string().nullable().optional(),
+      numberOfPackages: z.number().nullable().optional(),
+      marksAndNumbersDescription: z.string().nullable().optional(),
+      loadingPort: z.string().nullable().optional(),
+      dischargePort: z.string().nullable().optional(),
+      sea: z.object({
+        vesselName: z.string().nullable().optional(),
+        vesselId: z.string().nullable().optional(),
+        voyageNumber: z.string().nullable().optional(),
+        firstArrivalPort: z.string().nullable().optional(),
+        cargoType: z.string().nullable().optional(),
+        containerNumber: z.string().nullable().optional(),
+        oceanBillOfLadingNumber: z.string().nullable().optional(),
+        houseBillOfLadingNumber: z.string().nullable().optional(),
+      }).nullable().optional(),
+      air: z.object({
+        masterAirWaybillNumber: z.string().nullable().optional(),
+        houseAirWaybillNumber: z.string().nullable().optional(),
+      }).nullable().optional(),
+      post: z.object({
+        parcelPostCardNumber: z.string().nullable().optional(),
+      }).nullable().optional(),
+      other: z.object({
+        departmentReceiptForGoodsNumber: z.string().nullable().optional(),
+      }).nullable().optional(),
+    }).describe("Information about the transport of goods.").nullable().optional(),
+  });
+
+  const goodsDeclarationSchema = z.object({
+    goodsDeclaration: z.array(z.object({
+      lineNumber: z.number().nullable().optional(),
+      goodsDescription: z.string().nullable().optional(),
+      tariffClassificationNumber: z.string().nullable().optional(),
+      statisticalCode: z.string().nullable().optional(),
+      supplierName: z.string().nullable().optional(),
+      valuationBasisType: z.string().nullable().optional(),
+      treatmentCode: z.string().nullable().optional(),
+      gstExemptionCode: z.string().nullable().optional(),
+      establishmentCode: z.string().nullable().optional(),
+      quantity: z.number().nullable().optional(),
+      unit: z.string().nullable().optional(),
+      price: z.number().nullable().optional(),
+      currency: z.string().nullable().optional(),
+      valuationElements: z.array(z.object({
+        type: z.string().nullable().optional(),
+        amount: z.number().nullable().optional(),
+        currency: z.string().nullable().optional(),
+      })).nullable().optional(),
+      permits: z.array(z.object({
+        permitNumber: z.string().nullable().optional(),
+        instrumentType: z.string().nullable().optional(),
+        additionalInformation: z.string().nullable().optional(),
+      })).nullable().optional(),
+      producer: z.object({
+        producerCode: z.string().nullable().optional(),
+        type: z.string().nullable().optional(),
+      }).nullable().optional(),
+    })).describe("A list of goods being declared."),
+  });
+
+  const declarationStatementSchema = z.object({
+    declarationStatement: z.object({
+      name: z.string().nullable().optional(),
+      signature: z.string().nullable().optional(),
+      date: z.string().describe("YYYY-MM-DD").nullable().optional(),
+      isOwner: z.boolean().nullable().optional(),
+      isAgent: z.boolean().nullable().optional(),
+    }).describe("Statement of declaration.").nullable().optional(),
+    amberStatement: z.object({
+      reasonForUncertainty: z.string().nullable().optional(),
+    }).describe("Amber line statement for uncertain declarations.").nullable().optional(),
+  });
+
+  // Helper to create tool that saves N10 partial under given key
+  function createN10PartialTool(name: string, schema: z.ZodTypeAny) {
+    const fieldNames = Object.keys((schema as any).shape ?? {});
+    const fieldList = fieldNames.join(', ');
+    return tool({
+      description: `Extract the following sections of the N10 data: ${fieldList}.`,
+      parameters: schema,
+      execute: async function (params: any) {
+        console.log(`🔧 ${name} called`, params);
+        await fetchAction((convexApi as any).jobs.saveN10ExtractedDataPartial, {
+          jobId: jobId as Id<'jobs'>,
+          partial: params,
+        });
+        return { extracted: params };
+      },
+    });
+  }
+
+  const extractN10Header = createN10PartialTool('extract_n10_header', declarationHeaderSchema);
+  const extractN10Owner = createN10PartialTool('extract_n10_owner', ownerDetailsSchema);
+  const extractN10Sender = createN10PartialTool('extract_n10_sender', senderDetailsSchema);
+  const extractN10Transport = createN10PartialTool('extract_n10_transport', transportInformationSchema);
+  const extractN10Goods = createN10PartialTool('extract_n10_goods', goodsDeclarationSchema);
+  const extractN10Statement = createN10PartialTool('extract_n10_statement', declarationStatementSchema);
 
   const result = streamText({
     model: google('gemini-2.5-pro'),
+    providerOptions: {
+      google: {
+        thinkingConfig: {
+          thinkingBudget: 20000,
+        },
+      } satisfies GoogleGenerativeAIProviderOptions,
+    },
+    // model: anthropic('claude-4-sonnet-20250514'),
     system: `You are a document data extraction specialist. Your task is to extract structured data from logistics and customs documents.
 
 WORKFLOW SELECTION:
@@ -308,8 +437,16 @@ Call EACH tool exactly once in this recommended order:
   5. extract_details – routing, weights, packages, commercial terms
 
 **USER REQUESTS "N10" OR MENTIONS "N10 EXTRACTION":**
-Use the single extract_n10 tool to extract all relevant data in one call.
-The N10 tool can be used on ANY document type when the user specifically requests N10 extraction.
+Use the 6-tool N10 workflow.
+Call EACH tool exactly once in this recommended order:
+  1. extract_n10_header
+  2. extract_n10_owner
+  3. extract_n10_sender
+  4. extract_n10_transport
+  5. extract_n10_goods (this includes the list of all goods)
+  6. extract_n10_statement
+
+The N10 tools can be used on ANY document type when the user specifically requests N10 extraction.
 Extract whatever relevant information is available from the provided documents.
 
 **USER PROVIDES NO SPECIFIC REQUEST:**
@@ -317,12 +454,14 @@ Default to shipment registration workflow (5 tools) for general logistics docume
 
 IMPORTANT NOTES:
 • User intent overrides document type detection
-• If user says "extract N10" or "for N10 extraction", use the N10 tool regardless of document type
+• If user says "extract N10" or "for N10 extraction", use the N10 tools regardless of document type
 • If user says "extract shipment data", use the 5-tool workflow
 • Never mix workflows or call tools from different workflows
 • After completing the appropriate workflow, return \`DONE\` + summary
 
 EXTRACTION RULES:
+- CRITICAL: For all tools, you MUST provide a value for EVERY field defined in the tool's schema. If a value cannot be found in the document, you MUST explicitly use null.
+- CRITICAL (N10 Workflow): When calling \`extract_n10_goods\`, the number of items in the \`goodsDeclaration\` array MUST match the \`numberOfPackages\` value found when you called \`extract_n10_transport\`. Double-check the document to ensure all line items are extracted. If not, you must call the tool extract_n10_goods again.
 - Extract exact values from documents when clearly visible
 - For missing fields, use null/empty values
 - Dates must be in YYYY-MM-DD format
@@ -340,7 +479,12 @@ EXTRACTION RULES:
       extract_consignee: extractConsignee,
       extract_details: extractDetails,
       extract_customs: extractCustoms,
-      extract_n10: extractN10,
+      extract_n10_header: extractN10Header,
+      extract_n10_owner: extractN10Owner,
+      extract_n10_sender: extractN10Sender,
+      extract_n10_transport: extractN10Transport,
+      extract_n10_goods: extractN10Goods,
+      extract_n10_statement: extractN10Statement,
     },
     onFinish: async ({ response, usage }) => {
       try {
