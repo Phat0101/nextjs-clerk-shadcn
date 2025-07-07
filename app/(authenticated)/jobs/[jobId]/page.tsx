@@ -147,6 +147,29 @@ export default function JobCursorPage(props: any) {
     const [mentionIndex, setMentionIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement | null>(null);
 
+    // Capture streamed "thinking" parts from messages
+    const thinkingLines = useMemo(() => {
+        const lines: string[] = [];
+        chatMessages.forEach((m: any) => {
+            if (Array.isArray(m.parts)) {
+                m.parts.forEach((p: any) => {
+                    if (p.type === 'thinking' && typeof p.text === 'string') {
+                        lines.push(p.text);
+                    }
+                });
+            }
+        });
+        return lines;
+    }, [chatMessages]);
+
+    // Auto-scroll thinking box
+    const thinkingRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        if (thinkingRef.current) {
+            thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
+        }
+    }, [thinkingLines]);
+
     // Sync data from persisted job record
     useEffect(() => {
         if (jobDetails?.job?.shipmentRegistrationExtractedData) {
@@ -308,7 +331,7 @@ export default function JobCursorPage(props: any) {
                 if (selection) {
                     if (selection.isAll) {
                         attachAllFiles();
-                    } else {
+            } else {
                         attachFile(selection.fileUrl || '', selection.fileName);
                     }
                 }
@@ -530,7 +553,7 @@ export default function JobCursorPage(props: any) {
                                 ))}
                             </tbody>
                         </table>
-                    </div>
+            </div>
                 </CardContent>
             </Card>
         );
@@ -747,7 +770,7 @@ export default function JobCursorPage(props: any) {
                                                 <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
                                                 <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
                                                 <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({...n10Data, ...d})} />
-                                            </div>
+                                    </div>
                                          );
                                     }
                                 }
@@ -784,7 +807,7 @@ export default function JobCursorPage(props: any) {
                                              <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
                                              <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
                                              <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({...n10Data, ...d})} />
-                                         </div>
+                            </div>
                                      );
                                 }
                                 
@@ -885,6 +908,18 @@ export default function JobCursorPage(props: any) {
                             ))}
                             </div>
 
+                        {/* Streaming thinking box */}
+                        {thinkingLines.length > 0 && (
+                            <div
+                                ref={thinkingRef}
+                                className="h-24 overflow-y-auto bg-gray-50 border-t border-gray-200 px-2 py-1 text-[10px] font-mono"
+                            >
+                                {thinkingLines.map((line, idx) => (
+                                    <div key={idx}>{line}</div>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Input */}
                         <form onSubmit={onChatSubmit} className="p-3 border-t flex flex-col gap-2 relative">
                             {/* attachment chips */}
@@ -905,7 +940,7 @@ export default function JobCursorPage(props: any) {
                             )}
                             {/* Quick Action Buttons */}
                             <div className="flex gap-2">
-                                <Button
+                                    <Button
                                     variant="outline"
                                     size="sm"
                                     type="button"
@@ -914,7 +949,7 @@ export default function JobCursorPage(props: any) {
                                     disabled={isLoading}
                                 >
                                     Extract for Shipment
-                                </Button>
+                                    </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -925,7 +960,7 @@ export default function JobCursorPage(props: any) {
                                 >
                                     Extract for N10
                                 </Button>
-                            </div>
+                                </div>
                             <div className="flex items-center gap-2">
                                 <input
                                     className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -945,7 +980,7 @@ export default function JobCursorPage(props: any) {
                                 <Button type="submit" size="sm" disabled={isLoading || !chatInput.trim()}>
                                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
                                     </Button>
-                                </div>
+                            </div>
 
                             {/* mention dropdown */}
                             {mentionActive && mentionSuggestions.length > 0 && (

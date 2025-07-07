@@ -2,8 +2,9 @@
 import { streamText, tool } from 'ai';
 import { fetchMutation, fetchAction } from 'convex/nextjs';
 import { api as convexApi } from '@/convex/_generated/api';
-// import { google, GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
-import { anthropic, AnthropicProviderOptions } from '@ai-sdk/anthropic';
+// import { openai } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
+// import { anthropic } from '@ai-sdk/anthropic';
 import { Id } from '@/convex/_generated/dataModel';
 import {
   TRANSPORT_ENUM,
@@ -103,7 +104,6 @@ export const maxDuration = 30;
 const isImageUrl = (url: string) => /\.(jpg|jpeg|png|gif|bmp|webp)(\?|$)/i.test(url);
 
 // Helper to sanitize message for Convex storage
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeMessage(message: any): any {
   if (!message) return message;
 
@@ -124,11 +124,9 @@ function sanitizeMessage(message: any): any {
 }
 
 // Simple helper to persist a chat message
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function saveMessage(jobId: string, message: any) {
   try {
     const sanitizedMessage = sanitizeMessage(message);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await fetchMutation((convexApi as any).chat.addMessage, { jobId: jobId as Id<'jobs'>, message: sanitizedMessage });
   } catch (e) {
     console.error('persist chat message failed', e);
@@ -236,7 +234,6 @@ export async function POST(req: Request) {
     return tool({
       description: `Extract the ${key} section of the shipment data. Provide values for these fields: ${fieldList}. Return ONLY the parameters defined.`,
       parameters: schema,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       execute: async function (/** @type {any} */ params: any) {
         // Use explicit parameter variable instead of generic 'args' for better model clarity
         const sectionData = params; // alias with semantic name
@@ -409,24 +406,33 @@ export async function POST(req: Request) {
   const extractN10Owner = createN10PartialTool('extract_n10_owner', ownerDetailsSchema);
   const extractN10Sender = createN10PartialTool('extract_n10_sender', senderDetailsSchema);
   const extractN10Transport = createN10PartialTool('extract_n10_transport', transportInformationSchema);
-  const extractN10Goods = createN10PartialTool('extract_n10_goods', goodsDeclarationSchema);
+  const extractN10Goods = tool({
+    description:
+      `Extract the full \`goodsDeclaration\` list for the N10 document. ` +
+      `You MUST cross-reference BOTH the invoice and packing-list documents to ensure every line item is captured. ` +
+      `All fields defined in the schema are required (use null when not present). ` +
+      `CRITICAL: The length of \`goodsDeclaration\` MUST equal the \`numberOfPackages\` value from \`transportInformation\`. ` +
+      `If the counts differ, fix the list and call this tool again.`,
+    parameters: goodsDeclarationSchema,
+    execute: async (params: any) => {
+      console.log('🔧 extract_n10_goods called', params);
+      await fetchAction((convexApi as any).jobs.saveN10ExtractedDataPartial, {
+        jobId: jobId as Id<'jobs'>,
+        partial: params,
+      });
+      return { extracted: params };
+    },
+  });
   const extractN10Statement = createN10PartialTool('extract_n10_statement', declarationStatementSchema);
 
   const result = streamText({
-    // model: google('gemini-2.5-pro'),
+    model: google('gemini-2.5-pro'),
+    // model: anthropic('claude-4-sonnet-20250514'),
     // providerOptions: {
-    //   google: {
-    //     thinkingConfig: {
-    //       thinkingBudget: 50000,
-    //     },
-    //   } satisfies GoogleGenerativeAIProviderOptions,
+    //   anthropic: {
+    //     thinking: { type: 'enabled', budgetTokens: 50000 },
+    //   },
     // },
-    model: anthropic('claude-4-sonnet-20250514'),
-    providerOptions: {
-      anthropic: {
-        thinking: { type: 'enabled', budgetTokens: 50000 },
-      } satisfies AnthropicProviderOptions,
-    },
     system: `You are a document data extraction specialist. Your task is to extract structured data from logistics and customs documents.
 
 WORKFLOW SELECTION:
@@ -466,7 +472,7 @@ IMPORTANT NOTES:
 
 EXTRACTION RULES:
 - CRITICAL: For all tools, you MUST provide a value for EVERY field defined in the tool's schema. If a value cannot be found in the document, you MUST explicitly use null.
-- CRITICAL (N10 Workflow): When calling \`extract_n10_goods\`, the number of items in the \`goodsDeclaration\` array MUST match the \`numberOfPackages\` value found when you called \`extract_n10_transport\`. Double-check the document to ensure all line items are extracted. If not, you must call the tool extract_n10_goods again.
+- CRITICAL (N10 Workflow): When calling \`extract_n10_goods\`, you MUST build the \`goodsDeclaration\` array by CROSS-REFERENCING information from BOTH the invoice *and* the packing-list documents. The number of items in this array MUST exactly match the \`numberOfPackages\` value obtained from \`extract_n10_transport\`. If there is any mismatch or missing line item, you *must* correct the list and call \`extract_n10_goods\` again.
 - Extract exact values from documents when clearly visible
 - For missing fields, use null/empty values
 - Dates must be in YYYY-MM-DD format
@@ -562,5 +568,5 @@ EXTRACTION RULES:
     },
   });
 
-  return result.toDataStreamResponse();
+  return result.toDataStreamResponse({ sendReasoning: true });
 } 
