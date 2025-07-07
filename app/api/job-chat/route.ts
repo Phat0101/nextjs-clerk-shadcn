@@ -2,8 +2,8 @@
 import { streamText, tool } from 'ai';
 import { fetchMutation, fetchAction } from 'convex/nextjs';
 import { api as convexApi } from '@/convex/_generated/api';
-// import { google } from '@ai-sdk/google';
-import { anthropic } from '@ai-sdk/anthropic';
+import { google } from '@ai-sdk/google';
+// import { anthropic } from '@ai-sdk/anthropic';
 import { Id } from '@/convex/_generated/dataModel';
 import {
   TRANSPORT_ENUM,
@@ -258,7 +258,7 @@ export async function POST(req: Request) {
   const extractCustoms = createPartialTool('extract_customs', 'customs_fields', customsSchema);
 
   const result = streamText({
-    model: anthropic('claude-4-sonnet-20250514'),
+    model: google('gemini-2.5-pro'),
     system: `You are a shipment data extraction specialist. Your task is to extract structured data from shipment documents.
 
 CRITICAL: Use the extract_shipment tool EXACTLY ONCE to extract all data, then provide a brief summary. Do not call the tool multiple times.
