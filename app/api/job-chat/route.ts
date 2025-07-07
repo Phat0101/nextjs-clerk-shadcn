@@ -2,8 +2,8 @@
 import { streamText, tool } from 'ai';
 import { fetchMutation, fetchAction } from 'convex/nextjs';
 import { api as convexApi } from '@/convex/_generated/api';
-import { google, GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
-// import { anthropic } from '@ai-sdk/anthropic';
+// import { google, GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
+import { anthropic, AnthropicProviderOptions } from '@ai-sdk/anthropic';
 import { Id } from '@/convex/_generated/dataModel';
 import {
   TRANSPORT_ENUM,
@@ -106,7 +106,7 @@ const isImageUrl = (url: string) => /\.(jpg|jpeg|png|gif|bmp|webp)(\?|$)/i.test(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeMessage(message: any): any {
   if (!message) return message;
-  
+
   // Create a deep copy and clean it
   const sanitized = JSON.parse(JSON.stringify(message, (key, value) => {
     // Convert URL objects to strings
@@ -119,7 +119,7 @@ function sanitizeMessage(message: any): any {
     }
     return value;
   }));
-  
+
   return sanitized;
 }
 
@@ -413,15 +413,20 @@ export async function POST(req: Request) {
   const extractN10Statement = createN10PartialTool('extract_n10_statement', declarationStatementSchema);
 
   const result = streamText({
-    model: google('gemini-2.5-pro'),
+    // model: google('gemini-2.5-pro'),
+    // providerOptions: {
+    //   google: {
+    //     thinkingConfig: {
+    //       thinkingBudget: 50000,
+    //     },
+    //   } satisfies GoogleGenerativeAIProviderOptions,
+    // },
+    model: anthropic('claude-4-sonnet-20250514'),
     providerOptions: {
-      google: {
-        thinkingConfig: {
-          thinkingBudget: 20000,
-        },
-      } satisfies GoogleGenerativeAIProviderOptions,
+      anthropic: {
+        thinking: { type: 'enabled', budgetTokens: 50000 },
+      } satisfies AnthropicProviderOptions,
     },
-    // model: anthropic('claude-4-sonnet-20250514'),
     system: `You are a document data extraction specialist. Your task is to extract structured data from logistics and customs documents.
 
 WORKFLOW SELECTION:
@@ -503,7 +508,7 @@ EXTRACTION RULES:
           if (coreMessage.role === 'assistant') {
             // Handle different types of assistant message content
             let uiMessage: any;
-            
+
             if (typeof coreMessage.content === 'string') {
               // Simple text message
               uiMessage = {
@@ -516,7 +521,7 @@ EXTRACTION RULES:
               // Message with parts (text + tool calls)
               const parts = [];
               const toolInvocations = [];
-              
+
               for (const part of coreMessage.content) {
                 if (part.type === 'text') {
                   parts.push({
@@ -534,7 +539,7 @@ EXTRACTION RULES:
                   });
                 }
               }
-              
+
               uiMessage = {
                 id: coreMessage.id || `msg-${Date.now()}`,
                 role: 'assistant',
@@ -544,7 +549,7 @@ EXTRACTION RULES:
                 createdAt: new Date().toISOString(),
               };
             }
-            
+
             if (uiMessage) {
               await saveMessage(jobId, uiMessage);
             }
