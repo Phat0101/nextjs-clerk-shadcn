@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import TimeRemaining from "@/components/TimeRemaining";
-import { CheckCircle, AlertCircle, Loader2, FileText, Info, LayoutPanelLeft, LayoutPanelTop, X } from "lucide-react";
+import { CheckCircle, AlertCircle, Loader2, FileText, Info } from "lucide-react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -131,8 +131,6 @@ export default function JobCursorPage(props: any) {
 
     // Preview index for DocumentView
     const [previewIndex, setPreviewIndex] = useState(0);
-    type PreviewPosition = 'right' | 'bottom' | 'hidden';
-    const [previewPosition, setPreviewPosition] = useState<PreviewPosition>('right');
 
     // Shipment extraction result (from extract_shipment tool)
     const [shipmentData, setShipmentData] = useState<any | null>(null);
@@ -422,33 +420,94 @@ export default function JobCursorPage(props: any) {
             </div>
 
             <ResizablePanelGroup direction="horizontal" className="flex-1">
-                {/* Left – files & chat */}
+                {/* Left – files & document preview */}
+                <ResizablePanel defaultSize={25} minSize={15}>
+                    <ResizablePanelGroup direction="vertical" className="h-full">
+                        {/* File list */}
+                        <ResizablePanel defaultSize={20} minSize={15}>
+                            <div className="flex flex-col h-full">
+                                {/* File list header */}
+                                <div className="p-3 space-y-2 overflow-y-auto max-h-44 text-sm">
+                                    <div className="flex justify-between items-center">
+                                        <p className="font-medium">Job Files (drag into chat)</p>
+                                    </div>
+                                    {displayFiles.map((file, idx) => (
+                                        <div
+                                            key={file._id}
+                                            draggable
+                                            onDragStart={(e) => e.dataTransfer.setData("text/uri-list", file.fileUrl || "")}
+                                            className={`truncate cursor-grab px-1 py-0.5 rounded ${idx === previewIndex ? 'bg-blue-100 text-blue-800' : 'text-blue-700 hover:underline'}`}
+                                            onClick={() => setPreviewIndex(idx)}
+                                            onDoubleClick={() => attachFile(file.fileUrl || "", file.fileName)}
+                                        >
+                                            {file.fileName}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </ResizablePanel>
+
+                        <ResizableHandle withHandle />
+
+                        {/* Document preview */}
+                        <ResizablePanel defaultSize={80} minSize={50}>
+                            {displayFiles.length > 0 ? (
+                                <DocumentView files={displayFiles} previewIndex={previewIndex} onPreviewChange={setPreviewIndex} />
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No files</div>
+                            )}
+                        </ResizablePanel>
+                    </ResizablePanelGroup>
+                </ResizablePanel>
+
+                <ResizableHandle withHandle />
+
+                {/* Middle – output panel */}
+                <ResizablePanel defaultSize={50} minSize={35}>
+                    {(() => {
+                        const contentNode = shipmentData ? (
+                            <>
+                                <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
+                                <SectionEditor title="Consignor" sectionKey="consignor" keys={['company', 'address', 'city_state', 'country']} />
+                                <SectionEditor title="Consignee" sectionKey="consignee" keys={['company', 'address', 'city_state', 'country']} />
+                                <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
+                                <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
+                            </>
+                        ) : isExtracting ? (
+                            <>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <h3 className="font-semibold">Preparing extraction fields</h3>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                </div>
+                                {[
+                                    { title: 'Mode', keys: ['transport', 'container', 'type'] },
+                                    { title: 'Consignor', keys: ['company', 'address', 'city_state', 'country'] },
+                                    { title: 'Consignee', keys: ['company', 'address', 'city_state', 'country'] },
+                                    { title: 'Details', keys: ['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs'] },
+                                    { title: 'Customs', keys: ['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis'] },
+                                ].map(section => (
+                                    <SectionPlaceholder key={section.title} title={section.title} keys={section.keys} />
+                                ))}
+                            </>
+                        ) : (
+                            <div className="h-full flex items-center justify-center text-muted-foreground">
+                                Result will appear here...
+                            </div>
+                        );
+
+                        return (
+                            <div className="p-4 h-full overflow-y-auto space-y-4 text-sm">
+                                {contentNode}
+                            </div>
+                        );
+                    })()}
+                </ResizablePanel>
+
+                <ResizableHandle withHandle />
+
+                {/* Right – chat */}
                 <ResizablePanel defaultSize={25} minSize={15}>
                     <div className="flex flex-col h-full">
-                        {/* File list header with layout buttons */}
-                        <div className="border-b p-3 space-y-2 overflow-y-auto max-h-40 text-sm">
-                            <div className="flex justify-between items-center">
-                                <p className="font-medium">Job Files (drag into chat)</p>
-                                <div className="flex gap-1">
-                                    <button title="Preview bottom" onClick={() => setPreviewPosition('bottom')} className={`p-1 rounded ${previewPosition === 'bottom' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'}`}><LayoutPanelTop className="w-4 h-4" /></button>
-                                    <button title="Preview right" onClick={() => setPreviewPosition('right')} className={`p-1 rounded ${previewPosition === 'right' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'}`}><LayoutPanelLeft className="w-4 h-4" /></button>
-                                    <button title="Hide preview" onClick={() => setPreviewPosition('hidden')} className={`p-1 rounded ${previewPosition === 'hidden' ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'}`}><X className="w-4 h-4" /></button>
-                            </div>
-                        </div>
-                            {displayFiles.map((file, idx) => (
-                                <div
-                                    key={file._id}
-                                    draggable
-                                    onDragStart={(e) => e.dataTransfer.setData("text/uri-list", file.fileUrl || "")}
-                                    className={`truncate cursor-grab px-1 py-0.5 rounded ${idx === previewIndex ? 'bg-blue-100 text-blue-800' : 'text-blue-700 hover:underline'}`}
-                                    onClick={() => setPreviewIndex(idx)}
-                                    onDoubleClick={() => attachFile(file.fileUrl || "", file.fileName)}
-                                >
-                                    {file.fileName}
-                            </div>
-                        ))}
-                    </div>
-
                         {/* Chat messages */}
                         <div
                             className="flex-1 overflow-y-auto p-4 space-y-3"
@@ -464,7 +523,7 @@ export default function JobCursorPage(props: any) {
                                 <div key={m.id || idx} className="space-y-1 text-sm">
                                     <div className="font-semibold text-gray-500">
                                         {m.role === "user" ? "You" : "AI"}
-                </div>
+                                    </div>
                                     {/* Render each part according to its type */}
                                     {m.parts?.map((part: any, idx: number) => {
                                         if (part.type === 'text' && typeof part.text === 'string') {
@@ -494,23 +553,23 @@ export default function JobCursorPage(props: any) {
                                             });
                                         }
                                         if (pills.length === 0) return null;
-                                                    return (
+                                        return (
                                             <div className="flex flex-wrap">
                                                 {pills.map((u: string) => {
                                                     const f = displayFiles.find(f => f.fileUrl === u);
                                                     const name = f?.fileName || 'file';
                                                     return <FilePill key={u} name={name} />;
                                                 })}
-            </div>
+                                            </div>
                                         );
                                     })()}
                                     {/* Display tool invocation result if available */}
                                     {m.toolInvocations?.map((ti: any) => (
                                         <ToolInvocationDisplay key={ti.toolCallId} invocation={ti} />
-                                ))}
-                        </div>
+                                    ))}
+                                </div>
                             ))}
-                    </div>
+                        </div>
 
                         {/* Input */}
                         <form onSubmit={onChatSubmit} className="p-3 border-t flex flex-col gap-2 relative">
@@ -520,33 +579,33 @@ export default function JobCursorPage(props: any) {
                                     {queuedFileUrls.map((u) => {
                                         const f = displayFiles.find(f => f.fileUrl === u);
                                         const name = f?.fileName || 'file';
-                                    return (
+                                        return (
                                             <span key={u} className="flex items-center gap-1 bg-gray-200 text-gray-800 rounded-full px-2 py-0.5 text-xs">
                                                 <FileText className="w-3 h-3" />
                                                 {name}
                                                 <button type="button" onClick={() => setQueuedFileUrls(prev => prev.filter(x => x !== u))} className="ml-1 text-gray-500 hover:text-gray-700">×</button>
-                                </span>
-                                    );
-                                })}
-                            </div>
+                                            </span>
+                                        );
+                                    })}
+                                </div>
                             )}
                             <div className="flex items-center gap-2">
                                 <input
                                     className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                placeholder="Type a message..."
+                                    placeholder="Type a message..."
                                     value={chatInput}
-                                onChange={onInputChange}
-                                onKeyDown={onInputKeyDown}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={(e) => {
-                                    e.preventDefault();
-                                    const url = e.dataTransfer.getData("text/uri-list");
-                                    const hit = displayFiles.find((f) => f.fileUrl === url);
-                                    if (url && hit) attachFile(url, hit.fileName);
-                                }}
-                                ref={inputRef}
-                            />
-                            <Button type="submit" size="sm">
+                                    onChange={onInputChange}
+                                    onKeyDown={onInputKeyDown}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        const url = e.dataTransfer.getData("text/uri-list");
+                                        const hit = displayFiles.find((f) => f.fileUrl === url);
+                                        if (url && hit) attachFile(url, hit.fileName);
+                                    }}
+                                    ref={inputRef}
+                                />
+                                <Button type="submit" size="sm">
                                     Send
                                 </Button>
                             </div>
@@ -563,85 +622,8 @@ export default function JobCursorPage(props: any) {
                                 </div>
                             )}
                         </form>
-                            </div>
+                    </div>
                 </ResizablePanel>
-
-                <ResizableHandle withHandle />
-
-                {/* Middle – output panel */}
-                <ResizablePanel defaultSize={previewPosition === 'right' ? 45 : (previewPosition === 'hidden' ? 70 : 60)} minSize={25}>
-                    {(() => {
-                        const contentNode = shipmentData ? (
-                            <>
-                                <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
-                                <SectionEditor title="Consignor" sectionKey="consignor" keys={['company', 'address', 'city_state', 'country']} />
-                                <SectionEditor title="Consignee" sectionKey="consignee" keys={['company', 'address', 'city_state', 'country']} />
-                                <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
-                                <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
-                            </>
-                        ) : isExtracting ? (
-                            <>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <h3 className="font-semibold">Preparing extraction fields</h3>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                            </div>
-                                {[
-                                    { title: 'Mode', keys: ['transport', 'container', 'type'] },
-                                    { title: 'Consignor', keys: ['company', 'address', 'city_state', 'country'] },
-                                    { title: 'Consignee', keys: ['company', 'address', 'city_state', 'country'] },
-                                    { title: 'Details', keys: ['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs'] },
-                                    { title: 'Customs', keys: ['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis'] },
-                                ].map(section => (
-                                    <SectionPlaceholder key={section.title} title={section.title} keys={section.keys} />
-                                ))}
-                                        </>
-                                    ) : (
-                            <div className="h-full flex items-center justify-center text-muted-foreground">
-                                Awaiting action...
-                            </div>
-                        );
-
-                        if (previewPosition === 'bottom') {
-                                            return (
-                                <ResizablePanelGroup direction="vertical" className="h-full text-sm">
-                                    <ResizablePanel defaultSize={67} minSize={40}>
-                                        <div className="p-4 h-full overflow-y-auto space-y-4">
-                                            {contentNode}
-                                </div>
-                                    </ResizablePanel>
-                                    <ResizableHandle withHandle />
-                                    <ResizablePanel defaultSize={33} minSize={20}>
-                                        {displayFiles.length > 0 ? (
-                                            <DocumentView files={displayFiles} previewIndex={previewIndex} onPreviewChange={setPreviewIndex} />
-                                        ) : (
-                                            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No files</div>
-                                        )}
-                                    </ResizablePanel>
-                                </ResizablePanelGroup>
-                            );
-                        }
-
-                        // preview not bottom
-                                            return (
-                            <div className="p-4 h-full overflow-y-auto space-y-4 text-sm">
-                                {contentNode}
-                                                </div>
-                                            );
-                    })()}
-                </ResizablePanel>
-
-                {previewPosition === 'right' && (
-                    <>
-                <ResizableHandle withHandle />
-                        <ResizablePanel defaultSize={25} minSize={20}>
-                            {displayFiles.length > 0 ? (
-                                <DocumentView files={displayFiles} previewIndex={previewIndex} onPreviewChange={setPreviewIndex} />
-                            ) : (
-                                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">No files</div>
-                    )}
-                </ResizablePanel>
-                    </>
-                )}
             </ResizablePanelGroup>
         </div>
     );

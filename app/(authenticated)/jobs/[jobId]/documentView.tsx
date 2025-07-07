@@ -18,6 +18,7 @@ interface DocumentViewProps {
   onPreviewChange: (index: number) => void;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function DocumentView({ files, previewIndex, onPreviewChange }: DocumentViewProps) {
   const [isFileViewerLoading, setIsFileViewerLoading] = useState(false);
 
@@ -30,10 +31,10 @@ export default function DocumentView({ files, previewIndex, onPreviewChange }: D
   return (
     <div className="h-full border-r overflow-hidden" style={{ minWidth: "300px" }}>
       {/* Header with selector */}
-      <div className="p-4 py-2 border-b bg-gray-50">
-        <div className="flex justify-between items-center">
-          <p className="font-medium">Source Document</p>
-          {files.length > 1 && (
+      {/* <div className="p-4 py-2 border-b bg-gray-50"> */}
+        {/* <div className="flex justify-between items-center"> */}
+          {/* <p className="font-medium">Source Document</p> */}
+          {/* {files.length > 1 && (
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Preview:</span>
               <select
@@ -48,9 +49,9 @@ export default function DocumentView({ files, previewIndex, onPreviewChange }: D
                 ))}
               </select>
             </div>
-          )}
-        </div>
-      </div>
+          )} */}
+        {/* </div> */}
+      {/* </div> */}
 
       {/* Preview Area */}
       <div className="h-full relative overflow-auto">
