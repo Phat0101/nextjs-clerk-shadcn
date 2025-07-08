@@ -793,10 +793,10 @@ export default function JobCursorPage(props: any) {
                                             onDoubleClick={() => attachFile(file.fileUrl || "", file.fileName)}
                                         >
                                             {file.fileName}
-                                    </div>
-                                ))}
                         </div>
+                                ))}
                     </div>
+                </div>
                 </ResizablePanel>
 
                 <ResizableHandle withHandle />
@@ -841,9 +841,9 @@ export default function JobCursorPage(props: any) {
                                         >
                                             N10 Document
                                 </button>
+                                        </div>
                             </div>
-                                                                </div>
-                                                                </div>
+                        </div>
                         )}
 
                         {/* Content area */}
@@ -862,13 +862,13 @@ export default function JobCursorPage(props: any) {
                                                 <div className="flex gap-4">
                                                     <div className="flex-1">
                                                         <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
-                                                    </div>
+                                    </div>
                                                     <div className="flex-1">
                                                         <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
-                                                    </div>
-                                                </div>
+                            </div>
+                        </div>
                                                 <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
-                                                                </div>
+                    </div>
                                         );
                                     } else {
                                         const handleUpdate = async (sectionKey: string, updatedSectionData: any) => {
@@ -888,7 +888,7 @@ export default function JobCursorPage(props: any) {
                                                 <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
                                                 <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
                                                 <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({ ...n10Data, ...d })} />
-                                    </div>
+                            </div>
                                         );
                                     }
                                 }
@@ -901,13 +901,13 @@ export default function JobCursorPage(props: any) {
                                             <div className="flex gap-4">
                                                 <div className="flex-1">
                                                     <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
-                                                </div>
+                                                    </div>
                                                 <div className="flex-1">
                                                     <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
                                                 </div>
-                                            </div>
+                                                </div>
                                             <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
-                                </div>
+                                            </div>
                                     );
                                 }
 
@@ -944,11 +944,11 @@ export default function JobCursorPage(props: any) {
                                             <div className="flex items-center gap-2 mb-2">
                                                 <h3 className="font-semibold">{title}</h3>
                                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                            </div>
+                            </div>
                                             {sections.map(section => (
                                                 <SectionPlaceholder key={section.title} title={section.title} keys={section.keys} />
                                             ))}
-                                        </div>
+                        </div>
                                     );
                                 }
 
@@ -956,10 +956,10 @@ export default function JobCursorPage(props: any) {
                                 return (
                                     <div className="h-full flex items-center justify-center text-muted-foreground">
                                         Result will appear here...
-                                            </div>
+                            </div>
                                 );
                             })()}
-                                        </div>
+                        </div>
                             </div>
                 </ResizablePanel>
 
@@ -1013,21 +1013,21 @@ export default function JobCursorPage(props: any) {
                                             });
                                         }
                                         if (pills.length === 0) return null;
-                                        return (
+                                                    return (
                                             <div className="flex flex-wrap">
                                                 {pills.map((u: string) => {
                                                     const f = displayFiles.find(f => f.fileUrl === u);
                                                     const name = f?.fileName || 'file';
                                                     return <FilePill key={u} name={name} />;
                                                 })}
-                                </div>
+                                                                </div>
                                         );
                                     })()}
                                     {/* Display tool invocation result if available */}
                                     {m.toolInvocations?.map((ti: any) => (
                                         <ToolInvocationDisplay key={ti.toolCallId} invocation={ti} />
                                     ))}
-                        </div>
+                                                                </div>
                             ))}
                         </div>
 
@@ -1040,7 +1040,7 @@ export default function JobCursorPage(props: any) {
                                 {thinkingLines.map((line, idx) => (
                                     <div key={idx}>{line}</div>
                                 ))}
-                        </div>
+                                                                </div>
                     )}
 
                         {/* Input */}
@@ -1057,14 +1057,14 @@ export default function JobCursorPage(props: any) {
                                                 {name}
                                                 <button type="button" onClick={() => setQueuedFileUrls(prev => prev.filter(x => x !== u))} className="ml-1 text-gray-500 hover:text-gray-700">×</button>
                                             </span>
-                                            );
-                                        })}
+                                                    );
+                                                })}
                                     </div>
                             )}
                             {/* Quick Action Buttons */}
                             <div className="flex gap-2">
                                     <Button
-                                    variant="outline"
+                                        variant="outline"
                                     size="sm"
                                     type="button"
                                     className="text-xs h-7"
@@ -1083,7 +1083,7 @@ export default function JobCursorPage(props: any) {
                                 >
                                     Extract for N10
                                 </Button>
-                                </div>
+                            </div>
                             <div className="flex items-center gap-2">
                                 <input
                                     className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -1102,8 +1102,8 @@ export default function JobCursorPage(props: any) {
                                 />
                                 <Button type="submit" size="sm" disabled={isLoading || !chatInput.trim()}>
                                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
-                                </Button>
-                            </div>
+                                    </Button>
+                                </div>
 
                             {/* mention dropdown */}
                             {mentionActive && mentionSuggestions.length > 0 && (
