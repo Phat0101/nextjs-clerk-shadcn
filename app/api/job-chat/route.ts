@@ -136,7 +136,7 @@ async function saveMessage(jobId: string, message: any) {
 }
 
 export async function POST(req: Request) {
-  const { jobId, messages: clientMessages, fileUrls = [] } = await req.json();
+  const { jobId, messages: clientMessages, fileUrls = [], shipmentContext } = await req.json();
 
   if (!jobId) {
     return new Response('jobId is required', { status: 400 });
@@ -392,7 +392,7 @@ export async function POST(req: Request) {
     const fieldNames = Object.keys((schema as any).shape ?? {});
     const fieldList = fieldNames.join(', ');
     return tool({
-      description: `Extract the following sections of the N10 data: ${fieldList}.`,
+      description: `Extract the following sections of the N10 data: ${fieldList}. Use any available shipment context to ensure consistency.`,
       parameters: schema,
       execute: async function (params: any) {
         console.log(`🔧 ${name} called`, params);
@@ -412,22 +412,8 @@ export async function POST(req: Request) {
   const extractN10Goods = createN10PartialTool('extract_n10_goods', goodsDeclarationSchema);
   const extractN10Statement = createN10PartialTool('extract_n10_statement', declarationStatementSchema);
 
-  const result = streamText({
-    // model: google('gemini-2.5-pro'),
-    // providerOptions: {
-    //   google: {
-    //     thinkingConfig: {
-    //       thinkingBudget: 50000,
-    //     },
-    //   } satisfies GoogleGenerativeAIProviderOptions,
-    // },
-    model: anthropic('claude-4-sonnet-20250514'),
-    providerOptions: {
-      anthropic: {
-        thinking: { type: 'enabled', budgetTokens: 50000 },
-      } satisfies AnthropicProviderOptions,
-    },
-    system: `You are a document data extraction specialist. Your task is to extract structured data from logistics and customs documents.
+  // Build context-aware system prompt
+  let systemPrompt = `You are a document data extraction specialist. Your task is to extract structured data from logistics and customs documents.
 
 WORKFLOW SELECTION:
 Listen carefully to the user's request to determine which extraction workflow to use:
@@ -454,6 +440,14 @@ Call EACH tool exactly once in this recommended order:
 The N10 tools can be used on ANY document type when the user specifically requests N10 extraction.
 Extract whatever relevant information is available from the provided documents.
 
+**SHIPMENT CONTEXT INTEGRATION FOR N10:**
+When extracting N10 data, if shipment registration data has already been extracted from the same documents, use it as context to ensure consistency:
+- Map consignee information to N10 owner details
+- Use transport mode and routing information consistently
+- Align goods descriptions and values between shipment and N10 forms
+- Ensure house bill numbers and other identifiers match
+- Pre-populate delivery addresses from consignee data
+
 **USER PROVIDES NO SPECIFIC REQUEST:**
 Default to shipment registration workflow (5 tools) for general logistics documents.
 
@@ -472,7 +466,58 @@ EXTRACTION RULES:
 - Dates must be in YYYY-MM-DD format
 - Numbers should be numeric values without formatting
 - Analyze document context to deduce values when appropriate
-- Be flexible and extract relevant information even if document format doesn't perfectly match the expected type`,
+- Be flexible and extract relevant information even if document format doesn't perfectly match the expected type`;
+
+  // Add shipment context if available
+  if (shipmentContext) {
+    systemPrompt += `\n\n## SHIPMENT CONTEXT PROVIDED
+The following shipment form data has been extracted from the same documents and should be used as context to help with N10 extraction:
+
+**Consignor Information:**
+- Company: ${shipmentContext.consignor?.company || 'Not specified'}
+- Address: ${shipmentContext.consignor?.address || 'Not specified'}
+- City/State: ${shipmentContext.consignor?.city_state || 'Not specified'}
+- Country: ${shipmentContext.consignor?.country || 'Not specified'}
+
+**Consignee Information:**
+- Company: ${shipmentContext.consignee?.company || 'Not specified'}
+- Address: ${shipmentContext.consignee?.address || 'Not specified'}
+- City/State: ${shipmentContext.consignee?.city_state || 'Not specified'}
+- Country: ${shipmentContext.consignee?.country || 'Not specified'}
+
+**Transport Details:**
+- Mode: ${shipmentContext.mode?.transport || 'Not specified'}
+- Origin: ${shipmentContext.details?.origin || 'Not specified'}
+- Destination: ${shipmentContext.details?.destination || 'Not specified'}
+- House Bill: ${shipmentContext.details?.house_bill || 'Not specified'}
+- Weight: ${shipmentContext.details?.weight_value || 'Not specified'} ${shipmentContext.details?.weight_unit || ''}
+- Goods Description: ${shipmentContext.details?.description || 'Not specified'}
+- Goods Value: ${shipmentContext.details?.goods_value_amount || 'Not specified'} ${shipmentContext.details?.goods_value_currency || ''}
+
+Use this context to:
+1. Pre-populate delivery address from consignee information
+2. Set transport mode and details consistently
+3. Use goods description and value for tariff lines
+4. Ensure consistency between shipment and N10 data
+5. Map house bill numbers appropriately`;
+  }
+
+  const result = streamText({
+    // model: google('gemini-2.5-pro'),
+    // providerOptions: {
+    //   google: {
+    //     thinkingConfig: {
+    //       thinkingBudget: 50000,
+    //     },
+    //   } satisfies GoogleGenerativeAIProviderOptions,
+    // },
+    model: anthropic('claude-4-sonnet-20250514'),
+    providerOptions: {
+      anthropic: {
+        thinking: { type: 'enabled', budgetTokens: 50000 },
+      } satisfies AnthropicProviderOptions,
+    },
+    system: systemPrompt,
     messages,
     temperature: 0,
     maxSteps: 12,
@@ -563,4 +608,4 @@ EXTRACTION RULES:
   });
 
   return result.toDataStreamResponse();
-} 
+}
