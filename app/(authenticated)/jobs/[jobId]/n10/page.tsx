@@ -13,16 +13,18 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import TimeRemaining from "@/components/TimeRemaining";
-import { CheckCircle, AlertCircle, Loader2, FileText, Info } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useChat } from "@ai-sdk/react";
 import Markdown from "@/components/Markdown";
-import DocumentView from "./documentView";
+import DocumentView from "../../documentView";
 import { Label } from "@/components/ui/label";
 import { Loader2 as NewLoader2 } from "lucide-react";
 import { useState as useLocalState, useEffect as useLocalEffect } from 'react';
+import FilesAndDocumentPanel, { JobFile } from "../../FilesAndDocumentPanel";
+import ChatPanel from "../../ChatPanel";
 
 interface SuggestedField {
     name: string;
@@ -43,57 +45,7 @@ interface AnalysisResult {
 
 type WorkflowStep = 'loading' | 'selecting' | 'analyzing' | 'confirming' | 'extracting' | 'reviewing' | 'completed';
 
-// Shared file type used across job views
-interface JobFile {
-    _id: string;
-    fileUrl?: string | null;
-    fileType?: string;
-    fileName: string;
-    documentType?: string | null;
-    pageNumbers?: number[] | number;
-    fileSize?: number;
-}
 
-interface ToolInvocationProps {
-    invocation: any;
-}
-
-const ToolInvocationDisplay: React.FC<ToolInvocationProps> = ({ invocation }) => {
-    const [open, setOpen] = useState(false);
-    if (invocation.state === 'calling' || invocation.state === 'partial-call') {
-        return (
-            <div className="text-xs text-gray-400 flex items-center gap-1">
-                <Loader2 className="w-3 h-3 animate-spin" /> Running <code>{invocation.toolName}</code>...
-            </div>
-        );
-    }
-    if (invocation.state === 'error') {
-        return (
-            <div className="text-xs text-red-600">{invocation.error}</div>
-        );
-    }
-    if (invocation.state === 'result') {
-        return (
-            <div className="text-xs">
-                <button onClick={() => setOpen(!open)} className="text-blue-600 hover:underline focus:outline-none">
-                    {open ? 'Hide' : 'View'} {invocation.toolName} result
-                </button>
-                {open && (
-                    <pre className="bg-gray-50 p-2 mt-1 rounded text-[10px] overflow-x-auto border">
-                        {JSON.stringify(invocation.result, null, 2)}
-                    </pre>
-                )}
-            </div>
-        );
-    }
-    return null;
-};
-
-const FilePill: React.FC<{ name: string }> = ({ name }) => (
-    <span className="inline-flex items-center gap-1 bg-gray-200 text-gray-800 rounded-full px-2 py-0.5 text-[10px] mr-1 mt-1">
-        <FileText className="w-3 h-3" /> {name}
-    </span>
-);
 
 export default function JobCursorPage(props: any) {
     // Next.js 15: params is a Promise in client components – unwrap it
@@ -145,7 +97,6 @@ export default function JobCursorPage(props: any) {
     const [mentionActive, setMentionActive] = useState(false);
     const [mentionQuery, setMentionQuery] = useState('');
     const [mentionIndex, setMentionIndex] = useState(0);
-    const inputRef = useRef<HTMLInputElement | null>(null);
 
     // Capture streamed "thinking" parts from messages
     const thinkingLines = useMemo(() => {
@@ -161,14 +112,6 @@ export default function JobCursorPage(props: any) {
         });
         return lines;
     }, [chatMessages]);
-
-    // Auto-scroll thinking box
-    const thinkingRef = useRef<HTMLDivElement | null>(null);
-    useEffect(() => {
-        if (thinkingRef.current) {
-            thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
-        }
-    }, [thinkingLines]);
 
     // Sync data from persisted job record
     useEffect(() => {
@@ -310,7 +253,7 @@ export default function JobCursorPage(props: any) {
         if (atMatch) {
             setMentionActive(true);
             setMentionQuery(atMatch[1]);
-            } else {
+        } else {
             setMentionActive(false);
             setMentionQuery('');
         }
@@ -331,7 +274,7 @@ export default function JobCursorPage(props: any) {
                 if (selection) {
                     if (selection.isAll) {
                         attachAllFiles();
-            } else {
+                    } else {
                         attachFile(selection.fileUrl || '', selection.fileName);
                     }
                 }
@@ -398,7 +341,7 @@ export default function JobCursorPage(props: any) {
             // persist
             try {
                 await updateStep({ jobId, step: 'extracting', shipmentRegistrationExtractedData: merged });
-        } catch (err) {
+            } catch (err) {
                 console.error('save edit failed', err);
             }
             setEditing(null);
@@ -668,7 +611,7 @@ export default function JobCursorPage(props: any) {
                                 ))}
                             </tbody>
                         </table>
-            </div>
+                    </div>
                 </CardContent>
             </Card>
         );
@@ -692,8 +635,8 @@ export default function JobCursorPage(props: any) {
                     ))}
                 </tbody>
             </table>
-            </div>
-        );
+        </div>
+    );
 
     const shipmentPlaceholderSections = [
         { title: 'Consignor', keys: ['company', 'address', 'city_state', 'country'] },
@@ -774,42 +717,11 @@ export default function JobCursorPage(props: any) {
             <ResizablePanelGroup direction="horizontal" className="flex-1">
                 {/* Left – files & document preview */}
                 <ResizablePanel defaultSize={25} minSize={15}>
-                    <ResizablePanelGroup direction="vertical" className="h-full">
-                        {/* File list */}
-                <ResizablePanel defaultSize={20} minSize={15}>
-                            <div className="flex flex-col h-full">
-                                {/* File list header */}
-                                <div className="p-3 space-y-2 overflow-y-auto max-h-44 text-sm">
-                                    <div className="flex justify-between items-center">
-                                        <p className="font-medium">Job Files (drag into chat)</p>
-                                        </div>
-                                    {displayFiles.map((file, idx) => (
-                                        <div
-                                            key={file._id}
-                                            draggable
-                                            onDragStart={(e) => e.dataTransfer.setData("text/uri-list", file.fileUrl || "")}
-                                            className={`truncate cursor-grab px-1 py-0.5 rounded ${idx === previewIndex ? 'bg-blue-100 text-blue-800' : 'text-blue-700 hover:underline'}`}
-                                            onClick={() => setPreviewIndex(idx)}
-                                            onDoubleClick={() => attachFile(file.fileUrl || "", file.fileName)}
-                                        >
-                                            {file.fileName}
-                        </div>
-                                ))}
-                    </div>
-                </div>
-                </ResizablePanel>
-
-                <ResizableHandle withHandle />
-
-                        {/* Document preview */}
-                        <ResizablePanel defaultSize={80} minSize={50}>
-                            {displayFiles.length > 0 ? (
-                                <DocumentView files={displayFiles} previewIndex={previewIndex} onPreviewChange={setPreviewIndex} />
-                            ) : (
-                                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No files</div>
-                            )}
-                        </ResizablePanel>
-                    </ResizablePanelGroup>
+                    <FilesAndDocumentPanel
+                        displayFiles={displayFiles}
+                        previewIndex={previewIndex}
+                        onPreviewChange={setPreviewIndex}
+                    />
                 </ResizablePanel>
 
                 <ResizableHandle withHandle />
@@ -823,27 +735,27 @@ export default function JobCursorPage(props: any) {
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium text-gray-600">Document Type:</span>
                                     <div className="flex bg-gray-100 rounded-lg p-1">
-                                <button
+                                        <button
                                             onClick={() => setActiveDataType('shipment')}
                                             className={`px-3 py-1 text-xs rounded-md transition-colors ${activeDataType === 'shipment'
-                                                    ? 'bg-white text-blue-600 shadow-sm'
-                                                    : 'text-gray-600 hover:text-gray-800'
+                                                ? 'bg-white text-blue-600 shadow-sm'
+                                                : 'text-gray-600 hover:text-gray-800'
                                                 }`}
                                         >
                                             Shipment Registration
-                                </button>
-                                <button
+                                        </button>
+                                        <button
                                             onClick={() => setActiveDataType('n10')}
                                             className={`px-3 py-1 text-xs rounded-md transition-colors ${activeDataType === 'n10'
-                                                    ? 'bg-white text-blue-600 shadow-sm'
-                                                    : 'text-gray-600 hover:text-gray-800'
+                                                ? 'bg-white text-blue-600 shadow-sm'
+                                                : 'text-gray-600 hover:text-gray-800'
                                                 }`}
                                         >
                                             N10 Document
-                                </button>
-                                        </div>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
                         )}
 
                         {/* Content area */}
@@ -862,13 +774,13 @@ export default function JobCursorPage(props: any) {
                                                 <div className="flex gap-4">
                                                     <div className="flex-1">
                                                         <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
-                                    </div>
+                                                    </div>
                                                     <div className="flex-1">
                                                         <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
-                            </div>
-                        </div>
+                                                    </div>
+                                                </div>
                                                 <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
-                    </div>
+                                            </div>
                                         );
                                     } else {
                                         const handleUpdate = async (sectionKey: string, updatedSectionData: any) => {
@@ -888,7 +800,7 @@ export default function JobCursorPage(props: any) {
                                                 <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
                                                 <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
                                                 <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({ ...n10Data, ...d })} />
-                            </div>
+                                            </div>
                                         );
                                     }
                                 }
@@ -901,13 +813,13 @@ export default function JobCursorPage(props: any) {
                                             <div className="flex gap-4">
                                                 <div className="flex-1">
                                                     <SectionEditor title="Mode" sectionKey="mode" keys={['transport', 'container', 'type']} />
-                                                    </div>
+                                                </div>
                                                 <div className="flex-1">
                                                     <SectionEditor title="Customs" sectionKey="customs_fields" keys={['aqis_status', 'customs_status', 'subject_to_aqis', 'subject_to_jfis']} />
                                                 </div>
-                                                </div>
-                                            <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
                                             </div>
+                                            <SectionEditor title="Details" sectionKey="details" keys={['house_bill', 'domestic', 'origin', 'destination', 'etd', 'eta', 'weight_value', 'weight_unit', 'volume_value', 'volume_unit', 'chargeable_value', 'chargeable_unit', 'packages_count', 'packages_type', 'wv_ratio', 'inners_count', 'inners_type', 'goods_value_amount', 'goods_value_currency', 'insurance_value_amount', 'insurance_value_currency', 'description', 'marks_numbers', 'incoterm', 'free_on_board', 'spot_rate', 'spot_rate_type', 'use_standard_rate', 'service_level', 'release_type', 'charges_apply', 'phase', 'order_refs']} />
+                                        </div>
                                     );
                                 }
 
@@ -930,7 +842,7 @@ export default function JobCursorPage(props: any) {
                                             <N10ObjectEditor title="Transport Information" data={n10Data?.transportInformation} keys={n10FieldKeys.transportInformation} onUpdate={(d) => handleUpdate('transportInformation', d)} />
                                             <N10GoodsDeclarationViewer items={n10Data?.goodsDeclaration} />
                                             <N10ObjectEditor title="Declaration Statement" data={n10Data} keys={n10FieldKeys.declarationStatement} onUpdate={(d) => setN10Data({ ...n10Data, ...d })} />
-                            </div>
+                                        </div>
                                     );
                                 }
 
@@ -944,11 +856,11 @@ export default function JobCursorPage(props: any) {
                                             <div className="flex items-center gap-2 mb-2">
                                                 <h3 className="font-semibold">{title}</h3>
                                                 <Loader2 className="w-4 h-4 animate-spin" />
-                            </div>
+                                            </div>
                                             {sections.map(section => (
                                                 <SectionPlaceholder key={section.title} title={section.title} keys={section.keys} />
                                             ))}
-                        </div>
+                                        </div>
                                     );
                                 }
 
@@ -956,175 +868,44 @@ export default function JobCursorPage(props: any) {
                                 return (
                                     <div className="h-full flex items-center justify-center text-muted-foreground">
                                         Result will appear here...
-                            </div>
+                                    </div>
                                 );
                             })()}
                         </div>
-                            </div>
+                    </div>
                 </ResizablePanel>
 
                 <ResizableHandle withHandle />
 
                 {/* Right – chat */}
                 <ResizablePanel defaultSize={25} minSize={15}>
-                    <div className="flex flex-col h-full">
-                        {/* Chat messages */}
-                        <div
-                            className="flex-1 overflow-y-auto p-4 space-y-3"
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                const url = e.dataTransfer.getData("text/uri-list");
-                                const hit = displayFiles.find((f) => f.fileUrl === url);
-                                if (url && hit) attachFile(url, hit.fileName);
-                            }}
-                        >
-                            {chatMessages.map((m: any, idx: number) => (
-                                <div key={m.id || idx} className="space-y-1 text-sm">
-                                    <div className="font-semibold text-gray-500">
-                                        {m.role === "user" ? "You" : "AI"}
-                            </div>
-                                    {/* Render each part according to its type */}
-                                    {m.parts?.map((part: any, idx: number) => {
-                                        if (part.type === 'text' && typeof part.text === 'string') {
-                                            return <Markdown key={idx} content={part.text} />;
-                                        }
-                                        return null; // suppress raw tool-invocation parts
-                                    })}
-                                    {/* Fallback for legacy content */}
-                                    {!m.parts && typeof m.content === 'string' && <Markdown content={m.content} />}
-                                    {/* Attachment pills derived from explicit property OR mentions */}
-                                    {(() => {
-                                        const pills: string[] = Array.isArray(m.fileUrls) && m.fileUrls.length ? [...m.fileUrls] : [];
-                                        if (pills.length === 0 && Array.isArray(m.parts)) {
-                                            // if message text contains @filename mentions
-                                            m.parts.forEach((p: any) => {
-                                                if (p.type === 'text') {
-                                                    const text = typeof p.text === 'string' ? p.text : String(p.text ?? '');
-                                                    const matches = text.match(/@([^\s]+)/g);
-                                                    if (matches) {
-                                                        matches.forEach((tag: string) => {
-                                                            const name = tag.replace(/^@/, '');
-                                                            const hit = displayFiles.find(f => f.fileName === name);
-                                                            if (hit?.fileUrl) pills.push(hit.fileUrl);
-                                                        });
-                                                    }
-                                                }
-                                            });
-                                        }
-                                        if (pills.length === 0) return null;
-                                                    return (
-                                            <div className="flex flex-wrap">
-                                                {pills.map((u: string) => {
-                                                    const f = displayFiles.find(f => f.fileUrl === u);
-                                                    const name = f?.fileName || 'file';
-                                                    return <FilePill key={u} name={name} />;
-                                                })}
-                                                                </div>
-                                        );
-                                    })()}
-                                    {/* Display tool invocation result if available */}
-                                    {m.toolInvocations?.map((ti: any) => (
-                                        <ToolInvocationDisplay key={ti.toolCallId} invocation={ti} />
-                                    ))}
-                                                                </div>
-                            ))}
-                        </div>
-
-                        {/* Streaming thinking box */}
-                        {thinkingLines.length > 0 && (
-                            <div
-                                ref={thinkingRef}
-                                className="h-24 overflow-y-auto bg-gray-50 border-t border-gray-200 px-2 py-1 text-[10px] font-mono"
-                            >
-                                {thinkingLines.map((line, idx) => (
-                                    <div key={idx}>{line}</div>
-                                ))}
-                                                                </div>
-                    )}
-
-                        {/* Input */}
-                        <form onSubmit={onChatSubmit} className="p-3 border-t flex flex-col gap-2 relative">
-                            {/* attachment chips */}
-                            {queuedFileUrls.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mb-1">
-                                    {queuedFileUrls.map((u) => {
-                                        const f = displayFiles.find(f => f.fileUrl === u);
-                                        const name = f?.fileName || 'file';
-                                            return (
-                                            <span key={u} className="flex items-center gap-1 bg-gray-200 text-gray-800 rounded-full px-2 py-0.5 text-xs">
-                                                <FileText className="w-3 h-3" />
-                                                {name}
-                                                <button type="button" onClick={() => setQueuedFileUrls(prev => prev.filter(x => x !== u))} className="ml-1 text-gray-500 hover:text-gray-700">×</button>
-                                            </span>
-                                                    );
-                                                })}
-                                    </div>
-                            )}
-                            {/* Quick Action Buttons */}
-                            <div className="flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                    size="sm"
-                                    type="button"
-                                    className="text-xs h-7"
-                                    onClick={() => handleQuickAction('Extract for shipment')}
-                                    disabled={isLoading}
-                                >
-                                    Extract for Shipment
-                                    </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    type="button"
-                                    className="text-xs h-7"
-                                    onClick={() => handleQuickAction('Extract for N10')}
-                                    disabled={isLoading}
-                                >
-                                    Extract for N10
-                                </Button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    placeholder="Type a message..."
-                                    value={chatInput}
-                                    onChange={onInputChange}
-                                    onKeyDown={onInputKeyDown}
-                                    onDragOver={(e) => e.preventDefault()}
-                                    onDrop={(e) => {
-                                        e.preventDefault();
-                                        const url = e.dataTransfer.getData("text/uri-list");
-                                        const hit = displayFiles.find((f) => f.fileUrl === url);
-                                        if (url && hit) attachFile(url, hit.fileName);
-                                    }}
-                                    ref={inputRef}
-                                />
-                                <Button type="submit" size="sm" disabled={isLoading || !chatInput.trim()}>
-                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
-                                    </Button>
-                                </div>
-
-                            {/* mention dropdown */}
-                            {mentionActive && mentionSuggestions.length > 0 && (
-                                <div className="absolute left-3 bottom-full mb-1 bg-white border rounded shadow-lg w-56 max-h-60 overflow-y-auto z-20 text-sm">
-                                    {mentionSuggestions.map((file, idx) => (
-                                        <div key={file._id}
-                                            className={`px-2 py-1 cursor-pointer ${idx === mentionIndex ? 'bg-blue-600 text-white' : 'hover:bg-gray-100'}`}
-                                            onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                if (file.isAll) {
-                                                    attachAllFiles();
-                                                } else {
-                                                    attachFile(file.fileUrl || '', file.fileName);
-                                                }
-                                            }}
-                                        >{file.fileName}</div>
-                                    ))}
-                        </div>
-                    )}
-                        </form>
-                    </div>
+                    <ChatPanel
+                        chatMessages={chatMessages}
+                        chatInput={chatInput}
+                        isLoading={isLoading}
+                        queuedFileUrls={queuedFileUrls}
+                        displayFiles={displayFiles}
+                        previewIndex={previewIndex}
+                        onPreviewChange={setPreviewIndex}
+                        thinkingLines={thinkingLines}
+                        onChatSubmit={onChatSubmit}
+                        onInputChange={onInputChange}
+                        onInputKeyDown={onInputKeyDown}
+                        onQuickAction={handleQuickAction}
+                        onFileAttach={attachFile}
+                        onRemoveQueuedFile={(url) => setQueuedFileUrls(prev => prev.filter(x => x !== url))}
+                        mentionActive={mentionActive}
+                        mentionSuggestions={mentionSuggestions}
+                        mentionIndex={mentionIndex}
+                        onMentionSelect={(file) => {
+                            if (file.isAll) {
+                                attachAllFiles();
+                            } else {
+                                attachFile(file.fileUrl || '', file.fileName);
+                            }
+                        }}
+                        onMentionClose={() => setMentionActive(false)}
+                    />
                 </ResizablePanel>
             </ResizablePanelGroup>
         </div>

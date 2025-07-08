@@ -32,14 +32,15 @@ export default function PricingManagementPage() {
     const description = formData.get("description") as string;
     const amount = parseFloat(formData.get("amount") as string) * 100; // Convert to cents
     const currency = formData.get("currency") as string;
+    const jobType = formData.get("jobType") as "INVOICE" | "SHIPMENT" | "N10";
 
-    if (!name || !description || !amount || !currency) {
+    if (!name || !description || !amount || !currency || !jobType) {
       alert("Please fill in all fields");
       return;
     }
 
     try {
-      await createPriceUnit({ name, description, amount, currency });
+      await createPriceUnit({ name, description, amount, currency, jobType });
       setIsCreating(false);
     } catch (error) {
       console.error("Error creating price unit:", error);
@@ -53,8 +54,9 @@ export default function PricingManagementPage() {
     const amount = parseFloat(formData.get("amount") as string) * 100; // Convert to cents
     const currency = formData.get("currency") as string;
     const isActive = formData.get("isActive") === "true";
+    const jobType = formData.get("jobType") as "INVOICE" | "SHIPMENT" | "N10";
 
-    if (!name || !description || !amount || !currency) {
+    if (!name || !description || !amount || !currency || !jobType) {
       alert("Please fill in all fields");
       return;
     }
@@ -65,7 +67,8 @@ export default function PricingManagementPage() {
         name, 
         description, 
         amount, 
-        currency, 
+        currency,
+        jobType,
         isActive 
       });
       setEditingUnit(null);
@@ -113,7 +116,7 @@ export default function PricingManagementPage() {
           </CardHeader>
           <CardContent>
             <form action={handleCreateUnit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="name">Price Unit Name</Label>
                   <Input
@@ -134,6 +137,19 @@ export default function PricingManagementPage() {
                       <SelectItem value="USD">USD</SelectItem>
                       <SelectItem value="EUR">EUR</SelectItem>
                       <SelectItem value="GBP">GBP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="jobType">Job Type</Label>
+                  <Select name="jobType" defaultValue="INVOICE">
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="INVOICE">Invoice Extraction</SelectItem>
+                      <SelectItem value="SHIPMENT">Shipment Registration</SelectItem>
+                      <SelectItem value="N10">N10 Registration</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -184,7 +200,7 @@ export default function PricingManagementPage() {
             <CardContent className="p-6">
               {editingUnit === unit._id ? (
                 <form action={(formData) => handleUpdateUnit(formData, unit._id)} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label htmlFor={`edit-name-${unit._id}`}>Price Unit Name</Label>
                       <Input
@@ -208,6 +224,19 @@ export default function PricingManagementPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div>
+                      <Label htmlFor={`edit-jobType-${unit._id}`}>Job Type</Label>
+                      <Select name="jobType" defaultValue={unit.jobType ?? "INVOICE"}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="INVOICE">Invoice Extraction</SelectItem>
+                          <SelectItem value="SHIPMENT">Shipment Registration</SelectItem>
+                          <SelectItem value="N10">N10 Registration</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   
                   <div>
@@ -220,7 +249,7 @@ export default function PricingManagementPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label htmlFor={`edit-amount-${unit._id}`}>Price Amount</Label>
                       <div className="relative">
@@ -267,7 +296,8 @@ export default function PricingManagementPage() {
                         {unit.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </div>
-                    <p className="text-gray-600 mb-2">{unit.description}</p>
+                    <p className="text-gray-600 mb-1">{unit.description}</p>
+                    <p className="text-xs text-gray-500 mb-2">Job Type: {unit.jobType}</p>
                     <p className="text-2xl font-bold text-green-600">
                       {unit.currency} ${(unit.amount / 100).toFixed(2)}
                     </p>

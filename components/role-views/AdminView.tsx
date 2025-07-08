@@ -819,7 +819,7 @@ function PricingManagementView() {
     }
 
     try {
-      await createPriceUnit({ name, description, amount, currency });
+      await createPriceUnit({ name, description, amount, currency, jobType: "INVOICE" });
       setIsCreating(false);
     } catch (error) {
       console.error("Error creating price unit:", error);
@@ -840,12 +840,14 @@ function PricingManagementView() {
     }
 
     try {
+      const current = priceUnits?.find((u:any)=>u._id===unitId);
       await updatePriceUnit({ 
         id: unitId as any, 
         name, 
         description, 
         amount, 
         currency, 
+        jobType: current?.jobType || "INVOICE",
         isActive 
       });
       setEditingUnit(null);

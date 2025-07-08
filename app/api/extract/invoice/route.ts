@@ -1,4 +1,4 @@
-import { google } from '@ai-sdk/google';
+import { google, GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
@@ -156,7 +156,7 @@ Instructions:
 - Numbers: raw numeric values without currency symbols or formatting.
 - If a field is missing or unclear, leave it null/empty.
 - Be conservative: only extract data that is clearly visible and verifiable.
-${totalFiles > 1 ? '- Process each document separately and keep the same order as provided.' : ''}`
+${totalFiles > 1 ? '- Process all documents together and keep the same order as provided.' : ''}`
       }
     ];
 
@@ -191,8 +191,16 @@ ${totalFiles > 1 ? '- Process each document separately and keep the same order a
       });
     }
 
-    const { object: extractedData } = await generateObject({
+    const { object: extractedData, usage } = await generateObject({
       model: google('gemini-2.5-pro'),
+      providerOptions: {
+        google: {
+          thinkingConfig: {
+            thinkingBudget: 20000,
+            includeThoughts: true,
+          }
+        } satisfies GoogleGenerativeAIProviderOptions
+      },
       messages: [
         {
           role: 'user',
@@ -203,12 +211,14 @@ ${totalFiles > 1 ? '- Process each document separately and keep the same order a
       temperature: 0.0,
     });
 
+    console.log("Usage totalTokens: ", usage?.totalTokens, "promptTokens: ", usage?.promptTokens, "completionTokens: ", usage?.completionTokens);
+
     return NextResponse.json({
       extractedData,
       headerFields: headerFieldsInput.length,
       lineItemFields: lineItemFieldsInput.length,
       filesProcessed: totalFiles,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Error extracting data:', error);

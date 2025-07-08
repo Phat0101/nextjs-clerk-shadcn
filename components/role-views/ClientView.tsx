@@ -21,6 +21,7 @@ interface ClientViewProps {
 export default function ClientView({ currentView, onViewChange }: ClientViewProps) {
   const jobs = useQuery(api.jobs.getForClient);
   const stats = useQuery(api.myFunctions.getDashboardStats);
+  const router = useRouter();
 
   if (jobs === undefined) {
     return <div className="p-6">Loading...</div>;
@@ -45,7 +46,7 @@ export default function ClientView({ currentView, onViewChange }: ClientViewProp
           <h1 className="text-2xl font-bold text-gray-900">Client Dashboard</h1>
           <p className="text-gray-600">Manage your document processing jobs</p>
         </div>
-        <Button onClick={() => onViewChange("create-job")}>
+        <Button onClick={() => { onViewChange("create-job"); router.push('/jobs/create'); }}>
           <Plus className="w-4 h-4 mr-2" />
           Create Job
         </Button>

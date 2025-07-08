@@ -25,11 +25,14 @@ export default function CompilerView({ currentView, onViewChange }: CompilerView
   const acceptJobMutation = useMutation(api.jobs.acceptJob);
   const router = useRouter();
 
-  const handleAcceptJob = async (jobId: string) => {
+  const jobPath = (jobId: string, jobType?: "INVOICE"|"SHIPMENT"|"N10") => {
+    return `/jobs/${jobId}/${jobType === "SHIPMENT" ? "shipment" : jobType === "N10" ? "n10" : "invoice"}`;
+  };
+
+  const handleAcceptJob = async (job: { _id: string; jobType?: "INVOICE"|"SHIPMENT"|"N10"; }) => {
     try {
-      await acceptJobMutation({ jobId: jobId as Id<"jobs"> });
-      // After successful accept, navigate directly to job page
-      router.push(`/jobs/${jobId}`);
+      await acceptJobMutation({ jobId: job._id as Id<"jobs"> });
+      router.push(jobPath(job._id, job.jobType));
     } catch (err) {
       console.error("Failed to accept job", err);
       alert("Failed to accept job. Please try again.");
@@ -129,7 +132,7 @@ export default function CompilerView({ currentView, onViewChange }: CompilerView
                   </div>
                 </div>
                 <Button
-                  onClick={() => handleAcceptJob(job._id)}
+                  onClick={() => handleAcceptJob(job)}
                   size="sm"
                 >
                   Accept Job
@@ -166,7 +169,10 @@ export default function CompilerView({ currentView, onViewChange }: CompilerView
                 <Badge variant="secondary">In Progress</Badge>
                 <span className="text-sm text-gray-500">${(job.totalPrice / 100).toFixed(2)}</span>
                 <TimeRemaining deadline={job.deadline} />
-                <Button onClick={() => router.push(`/jobs/${job._id}`)} size="sm">
+                <Button onClick={() => {
+                  const seg = (job as any).jobType === "SHIPMENT" ? "shipment" : (job as any).jobType === "N10" ? "n10" : "invoice";
+                  router.push(`/jobs/${job._id}/${seg}`);
+                }} size="sm">
                   Continue Work
                 </Button>
               </div>
@@ -194,8 +200,9 @@ function AvailableJobsView({
     compilerPrice: number;
     deadline: number;
     status: string;
+    jobType?: "INVOICE"|"SHIPMENT"|"N10";
   }>;
-  onAccept: (id: string) => void;
+  onAccept: (job: { _id: string; jobType?: "INVOICE"|"SHIPMENT"|"N10"; }) => void;
 }) {
   return (
     <div className="p-6">
@@ -216,7 +223,7 @@ function AvailableJobsView({
                   </div>
                 </div>
                 <Button
-                  onClick={() => onAccept(job._id)}
+                  onClick={() => onAccept(job)}
                 >
                   Accept Job
                 </Button>
@@ -246,6 +253,7 @@ function ActiveJobsView({
     totalPrice: number;
     deadline: number;
     status: string;
+    jobType?: "INVOICE"|"SHIPMENT"|"N10";
   }>;
   router: any;
 }) {
@@ -261,7 +269,10 @@ function ActiveJobsView({
                 <Badge variant="secondary">In Progress</Badge>
                 <span className="text-sm text-gray-500">${(job.totalPrice / 100).toFixed(2)}</span>
                 <TimeRemaining deadline={job.deadline} />
-                <Button onClick={() => router.push(`/jobs/${job._id}`)} size="sm">
+                <Button onClick={() => {
+                  const seg = (job as any).jobType === "SHIPMENT" ? "shipment" : (job as any).jobType === "N10" ? "n10" : "invoice";
+                  router.push(`/jobs/${job._id}/${seg}`);
+                }} size="sm">
                   Continue Work
                 </Button>
               </div>

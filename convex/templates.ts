@@ -13,7 +13,7 @@ export const matchTemplate = action({
     // Compute embedding for search key
     const vector = await embedText(`${supplier} ${clientName || ""}`.trim());
 
-    // Perform vector search and return multiple matches (score >= 0.8)
+    // Perform vector search and return multiple matches (score >= 0.9)
     const results = await (ctx as any).vectorSearch("invoiceTemplates", "by_embedding", {
       vector,
       limit: 10,
@@ -22,7 +22,7 @@ export const matchTemplate = action({
     console.log("vectorSearch results", results);
     if (results.length === 0) return [];
 
-    const filtered = results.filter((r: any) => r._score !== undefined && r._score >= 0.8);
+    const filtered = results.filter((r: any) => r._score !== undefined && r._score >= 0.9);
     if (filtered.length === 0) return [];
 
     // Fetch docs
@@ -78,7 +78,7 @@ export const saveTemplate = action({
     const embedding = await embedText(`${supplier} ${clientName || ""}`.trim());
 
     // Persist via mutation (actions cannot write directly to DB)
-    await ctx.runMutation((internal as any).templates.internalUpsertTemplate, {
+    const newId: any = await ctx.runMutation((internal as any).templates.internalUpsertTemplate, {
       templateId,
       clientId,
       supplier,
@@ -88,6 +88,8 @@ export const saveTemplate = action({
       embedding,
       createdBy,
     });
+
+    return newId || templateId;
   },
 });
 
@@ -116,7 +118,7 @@ export const internalUpsertTemplate = internalMutation({
         supplier,
         clientName,
       });
-      return;
+      return templateId;
     }
 
     // Otherwise attempt to find existing by clientId + supplier
@@ -133,12 +135,12 @@ export const internalUpsertTemplate = internalMutation({
           embedding,
           clientName,
         });
-        return;
+        return existing._id as Id<'invoiceTemplates'>;
       }
     }
 
     // Insert new
-    await ctx.db.insert("invoiceTemplates", {
+    const newId: any = await ctx.db.insert("invoiceTemplates", {
       clientId,
       supplier,
       clientName,
@@ -148,6 +150,8 @@ export const internalUpsertTemplate = internalMutation({
       createdBy,
       createdAt: Date.now(),
     });
+
+    return newId as any;
   },
 });
 

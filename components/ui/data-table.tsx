@@ -155,7 +155,7 @@ interface DataTableProps {
 
 export function DataTable({ headerData, lineItemsData, headerFields = [], lineItemFields = [], onChange, onExportCSV }: DataTableProps) {
   return (
-    <div className="space-y-3 text-sm max-h-[60vh] overflow-y-auto">
+    <div className="space-y-3 text-sm max-h-[80vh] overflow-y-auto">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold">Extracted Data</h3>
         <Button onClick={onExportCSV} className="flex items-center gap-1 py-1 h-7 text-xs">

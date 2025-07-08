@@ -255,12 +255,16 @@ export const createJob = mutation({
     // Calculate total price (flat rate per job)
     const totalPrice = priceUnit.amount;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jobType = (priceUnit as any).jobType || "INVOICE";
+
     // Calculate deadline timestamp (current time + deadline hours)
     const deadline = Date.now() + (deadlineHours * 60 * 60 * 1000);
 
     // Create the job
     const jobId = await ctx.db.insert("jobs", {
       title,
+      jobType,
       priceUnitId,
       totalPrice,
       clientId: user.clientId,

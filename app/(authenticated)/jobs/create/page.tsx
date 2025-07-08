@@ -25,6 +25,7 @@ interface PriceUnit {
   description: string;
   amount: number;
   currency: string;
+  jobType?: "INVOICE" | "SHIPMENT" | "N10";
   isActive: boolean;
 }
 
@@ -32,6 +33,7 @@ export default function CreateJobPage() {
   const [title, setTitle] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [selectedPriceUnitId, setSelectedPriceUnitId] = useState<Id<"priceUnits"> | "">("");
+  const [jobType, setJobType] = useState<"INVOICE" | "SHIPMENT" | "N10">("INVOICE");
   const [deadlineHours, setDeadlineHours] = useState<number>(24);
   const [isUploading, setIsUploading] = useState(false);
   
@@ -122,15 +124,30 @@ export default function CreateJobPage() {
               />
             </div>
 
-            {/* Price Unit Selection */}
+            {/* Job Type Selection */}
             <div className="space-y-2">
-              <Label htmlFor="priceUnit">Service Type</Label>
-              <Select value={selectedPriceUnitId as string} onValueChange={(val)=>setSelectedPriceUnitId(val as Id<"priceUnits">)}>
+              <Label htmlFor="jobType">Job Type</Label>
+              <Select value={jobType} onValueChange={(val)=>{ setJobType(val as "INVOICE"|"SHIPMENT"|"N10"); setSelectedPriceUnitId(""); }}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a service type" />
+                  <SelectValue placeholder="Select job type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {priceUnits?.map((unit: PriceUnit) => (
+                  <SelectItem value="INVOICE">Invoice Extraction</SelectItem>
+                  <SelectItem value="SHIPMENT">Shipment Registration</SelectItem>
+                  <SelectItem value="N10">N10 Registration</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Price Unit Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="priceUnit">Price Unit</Label>
+              <Select value={selectedPriceUnitId as string} onValueChange={(val)=>setSelectedPriceUnitId(val as Id<"priceUnits">)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a price unit" />
+                </SelectTrigger>
+                <SelectContent>
+                  {priceUnits?.filter((unit: PriceUnit)=>((unit.jobType||"INVOICE")== jobType) && unit.isActive).map((unit: PriceUnit) => (
                     <SelectItem key={unit._id} value={unit._id}>
                       {unit.name} - {unit.currency} ${(unit.amount / 100).toFixed(2)}
                     </SelectItem>

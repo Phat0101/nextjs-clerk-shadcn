@@ -29,6 +29,7 @@ export const seedDefaultPriceUnits = mutation({
       currency: "AUD",
       isActive: true,
       createdBy: user._id,
+      jobType: "INVOICE",
     });
 
     await ctx.db.insert("priceUnits", {
@@ -38,6 +39,7 @@ export const seedDefaultPriceUnits = mutation({
       currency: "AUD",
       isActive: true,
       createdBy: user._id,
+      jobType: "INVOICE",
     });
 
     await ctx.db.insert("priceUnits", {
@@ -47,6 +49,7 @@ export const seedDefaultPriceUnits = mutation({
       currency: "AUD", 
       isActive: true,
       createdBy: user._id,
+      jobType: "INVOICE",
     });
 
     return "Successfully created default price units";

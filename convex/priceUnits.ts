@@ -37,8 +37,13 @@ export const create = mutation({
     description: v.string(),
     amount: v.number(),
     currency: v.string(),
+    jobType: v.union(
+      v.literal("INVOICE"),
+      v.literal("SHIPMENT"),
+      v.literal("N10")
+    ),
   },
-  handler: async (ctx, { name, description, amount, currency }) => {
+  handler: async (ctx, { name, description, amount, currency, jobType }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     
@@ -56,6 +61,7 @@ export const create = mutation({
       description,
       amount,
       currency,
+      jobType,
       isActive: true,
       createdBy: currentUser._id,
     });
@@ -70,9 +76,14 @@ export const update = mutation({
     description: v.string(),
     amount: v.number(),
     currency: v.string(),
+    jobType: v.union(
+      v.literal("INVOICE"),
+      v.literal("SHIPMENT"),
+      v.literal("N10")
+    ),
     isActive: v.boolean(),
   },
-  handler: async (ctx, { id, name, description, amount, currency, isActive }) => {
+  handler: async (ctx, { id, name, description, amount, currency, jobType, isActive }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     
@@ -90,6 +101,7 @@ export const update = mutation({
       description,
       amount,
       currency,
+      jobType,
       isActive,
     });
   },

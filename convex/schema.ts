@@ -34,6 +34,14 @@ export default defineSchema({
     description: v.string(),
     amount: v.number(), // in cents
     currency: v.string(), // e.g., "AUD"
+    // Job type this price unit applies to
+    jobType: v.optional(
+      v.union(
+        v.literal("INVOICE"),
+        v.literal("SHIPMENT"),
+        v.literal("N10")
+      )
+    ),
     isActive: v.boolean(),
     createdBy: v.id("users"),
   }),
@@ -41,6 +49,14 @@ export default defineSchema({
   // Jobs are the core unit of work
   jobs: defineTable({
     title: v.string(),
+    // What kind of job this is (invoice extraction, shipment registration, N10 registration)
+    jobType: v.optional(
+      v.union(
+        v.literal("INVOICE"),
+        v.literal("SHIPMENT"),
+        v.literal("N10")
+      )
+    ),
     status: v.union(v.literal("RECEIVED"), v.literal("IN_PROGRESS"), v.literal("COMPLETED")),
     clientId: v.id("clients"),
     compilerId: v.optional(v.id("users")),

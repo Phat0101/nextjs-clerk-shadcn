@@ -21,8 +21,8 @@ export async function POST(req: NextRequest) {
     if (templateId) payload.templateId = templateId;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await fetchAction((api as any).templates.saveTemplate, payload);
-    return NextResponse.json({ ok: true });
+    const newId = await fetchAction((api as any).templates.saveTemplate, payload);
+    return NextResponse.json({ templateId: newId });
   } catch (error) {
     console.error("Save template API error", error);
     return NextResponse.json({ error: "Failed to save template" }, { status: 500 });
