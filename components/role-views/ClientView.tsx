@@ -146,7 +146,7 @@ export default function ClientView({ currentView, onViewChange }: ClientViewProp
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {jobs.slice(0, 5).map((job) => (
+            {jobs.slice(0, 5).map((job: any) => (
               <div key={job._id} className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex items-center gap-3">
                   <FileText className="w-4 h-4 text-gray-400" />
@@ -300,7 +300,7 @@ function MyJobsView({ jobs }: { jobs: Array<{
                   <div>
                     <div className="font-medium text-gray-700 mb-1">Files ({jobFiles.length}):</div>
                     <div className="space-y-1 pl-2">
-                      {jobFiles.map((file) => (
+                      {jobFiles.map((file: any) => (
                         <div key={file._id}>
                           <button
                             onClick={(e) => {
@@ -439,7 +439,7 @@ function MyJobsView({ jobs }: { jobs: Array<{
                 <p className="text-gray-500 text-sm">No jobs waiting to be picked up</p>
               </div>
             ) : (
-              receivedJobs.map((job) => (
+              receivedJobs.map((job: any) => (
                 <JobCard
                   key={job._id}
                   job={job}
@@ -466,7 +466,7 @@ function MyJobsView({ jobs }: { jobs: Array<{
                 <p className="text-gray-500 text-sm">No jobs currently being processed</p>
               </div>
             ) : (
-              inProgressJobs.map((job) => (
+              inProgressJobs.map((job: any) => (
                 <JobCard
                   key={job._id}
                   job={job}
@@ -493,7 +493,7 @@ function MyJobsView({ jobs }: { jobs: Array<{
                 <p className="text-gray-500 text-sm">No completed jobs yet</p>
               </div>
             ) : (
-              completedJobs.map((job) => (
+              completedJobs.map((job: any) => (
                 <JobCard
                   key={job._id}
                   job={job}

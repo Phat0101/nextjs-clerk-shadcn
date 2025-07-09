@@ -150,6 +150,12 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
             active: currentView === "commission-settings"
           },
           {
+            id: "processing-settings",
+            label: "Processing Settings",
+            icon: BarChart3,
+            active: currentView === "processing-settings"
+          },
+          {
             id: "users",
             label: "User Management",
             icon: Users,

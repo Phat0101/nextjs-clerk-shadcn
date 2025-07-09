@@ -28,7 +28,7 @@ export default function FilesAndDocumentPanel({
             {displayFiles.length > 0 ? (
                 <DocumentView files={displayFiles} previewIndex={previewIndex} onPreviewChange={onPreviewChange} />
             ) : (
-                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No files</div>
+                <div className="h-full flex items-center justify-center text-muted-foreground text-xs">No files</div>
             )}
         </div>
     );

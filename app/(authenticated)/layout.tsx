@@ -74,6 +74,9 @@ export default function AuthenticatedLayout({
       case "pricing":
         router.push("/admin/pricing");
         break;
+      case "processing-settings":
+        router.push("/dashboard?view=processing-settings");
+        break;
       case "analytics":
         router.push("/dashboard?view=analytics");
         break;

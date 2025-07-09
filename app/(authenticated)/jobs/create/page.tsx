@@ -83,14 +83,19 @@ export default function CreateJobPage() {
       }
       
       // Create job with original files metadata
-      await createJob({ 
+      const jobId = await createJob({ 
         title, 
         priceUnitId: selectedPriceUnitId as Id<"priceUnits">, 
         deadlineHours,
         files: uploadedFiles,
       });
       
-      // Redirect to dashboard
+      // Trigger auto-processing for invoice jobs in background
+      if (jobType === "INVOICE" && jobId) {
+        triggerAutoProcessing(jobId);
+      }
+      
+      // Redirect to dashboard immediately
       router.push('/dashboard?view=my-jobs');
       
     } catch (error) {
@@ -98,6 +103,33 @@ export default function CreateJobPage() {
       alert("Error creating job. Please try again.");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  // Background auto-processing trigger (non-blocking)
+  const triggerAutoProcessing = async (jobId: string) => {
+    try {
+      console.log("Triggering auto-processing for job:", jobId);
+      
+      // Add a small delay to ensure job is fully committed to database
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const response = await fetch("/api/agent/invoice/auto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Auto-processing result:", result);
+      } else {
+        const errorText = await response.text();
+        console.warn("Auto-processing failed:", errorText);
+      }
+    } catch (error) {
+      console.error("Auto-processing error:", error);
+      // Don't show error to user - this is a background task
     }
   };
 

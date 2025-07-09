@@ -16,24 +16,24 @@ const ToolInvocationDisplay: React.FC<ToolInvocationProps> = ({ invocation }) =>
     const [open, setOpen] = useState(false);
     if (invocation.state === 'calling' || invocation.state === 'partial-call') {
         return (
-            <div className="text-xs text-gray-400 flex items-center gap-1">
-                <Loader2 className="w-3 h-3 animate-spin" /> Running <code>{invocation.toolName}</code>...
+            <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                <Loader2 className="w-2 h-2 animate-spin" /> Running <code>{invocation.toolName}</code>...
             </div>
         );
     }
     if (invocation.state === 'error') {
         return (
-            <div className="text-xs text-red-600">{invocation.error}</div>
+            <div className="text-[10px] text-red-600">{invocation.error}</div>
         );
     }
     if (invocation.state === 'result') {
         return (
-            <div className="text-xs">
+            <div className="text-[10px]">
                 <button onClick={() => setOpen(!open)} className="text-blue-600 hover:underline focus:outline-none">
                     {open ? 'Hide' : 'View'} {invocation.toolName} result
                 </button>
                 {open && (
-                    <pre className="bg-gray-50 p-2 mt-1 rounded text-[10px] overflow-x-auto border">
+                    <pre className="bg-gray-50 p-1 mt-1 rounded text-[9px] overflow-x-auto border">
                         {JSON.stringify(invocation.result, null, 2)}
                     </pre>
                 )}
@@ -44,8 +44,8 @@ const ToolInvocationDisplay: React.FC<ToolInvocationProps> = ({ invocation }) =>
 };
 
 const FilePill: React.FC<{ name: string }> = ({ name }) => (
-    <span className="inline-flex items-center gap-1 bg-gray-200 text-gray-800 rounded-full px-2 py-0.5 text-[10px] mr-1 mt-1">
-        <FileText className="w-3 h-3" /> {name}
+    <span className="inline-flex items-center gap-1 bg-gray-200 text-gray-800 rounded-full px-1 py-0.5 text-[9px] mr-1 mt-1">
+        <FileText className="w-2 h-2" /> {name}
     </span>
 );
 
@@ -113,7 +113,7 @@ export default function ChatPanel({
         <ResizablePanelGroup direction="vertical" className="h-full">
             {/* File list at top */}
             <ResizablePanel defaultSize={20} minSize={10}>
-                <div className="p-3 space-y-2 overflow-y-auto max-h-48 text-sm">
+                <div className="p-2 space-y-1 overflow-y-auto max-h-40 text-xs">
                     <div className="flex justify-between items-center">
                         <p className="font-medium">Job Files</p>
                     </div>
@@ -139,12 +139,12 @@ export default function ChatPanel({
                 <div className="flex flex-col h-full">
                     {/* Chat messages */}
                     <div
-                        className="flex-1 overflow-y-auto p-4 space-y-3"
+                        className="flex-1 overflow-y-auto p-3 space-y-2"
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={handleDrop}
                     >
                         {chatMessages.map((m: any, idx: number) => (
-                            <div key={m.id || idx} className="space-y-1 text-sm">
+                            <div key={m.id || idx} className="space-y-1 text-xs">
                                 <div className="font-semibold text-gray-500">
                                     {m.role === "user" ? "You" : "AI"}
                                 </div>
@@ -199,7 +199,7 @@ export default function ChatPanel({
                     {thinkingLines.length > 0 && (
                         <div
                             ref={thinkingRef}
-                            className="h-24 overflow-y-auto bg-gray-50 border-t border-gray-200 px-2 py-1 text-[10px] font-mono"
+                            className="h-20 overflow-y-auto bg-gray-50 border-t border-gray-200 px-2 py-1 text-[9px] font-mono"
                         >
                             {thinkingLines.map((line, idx) => (
                                 <div key={idx}>{line}</div>
@@ -208,7 +208,7 @@ export default function ChatPanel({
                     )}
 
                     {/* Input */}
-                    <form onSubmit={onChatSubmit} className="p-3 border-t flex flex-col gap-2 relative">
+                    <form onSubmit={onChatSubmit} className="p-2 border-t flex flex-col gap-1 relative">
                         {/* attachment chips */}
                         {queuedFileUrls.length > 0 && (
                             <div className="flex flex-wrap gap-1 mb-1">
@@ -216,8 +216,8 @@ export default function ChatPanel({
                                     const f = displayFiles.find(f => f.fileUrl === u);
                                     const name = f?.fileName || 'file';
                                     return (
-                                        <span key={u} className="flex items-center gap-1 bg-gray-200 text-gray-800 rounded-full px-2 py-0.5 text-xs">
-                                            <FileText className="w-3 h-3" />
+                                        <span key={u} className="flex items-center gap-1 bg-gray-200 text-gray-800 rounded-full px-1 py-0.5 text-[10px]">
+                                            <FileText className="w-2 h-2" />
                                             {name}
                                             <button type="button" onClick={() => onRemoveQueuedFile(u)} className="ml-1 text-gray-500 hover:text-gray-700">×</button>
                                         </span>
@@ -226,12 +226,12 @@ export default function ChatPanel({
                             </div>
                         )}
                         {/* Quick Action Buttons */}
-                        <div className="flex gap-2">
+                        <div className="flex gap-1">
                             <Button
                                 variant="outline"
                                 size="sm"
                                 type="button"
-                                className="text-xs h-7"
+                                className="text-[10px] h-6 px-2"
                                 onClick={() => onQuickAction('Extract Invoice')}
                                 disabled={isLoading}
                             >
@@ -240,7 +240,7 @@ export default function ChatPanel({
                         </div>
                         <div className="flex items-center gap-2">
                             <input
-                                className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="flex-1 border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 placeholder="Type a message..."
                                 value={chatInput}
                                 onChange={onInputChange}
@@ -249,14 +249,14 @@ export default function ChatPanel({
                                 onDrop={handleDrop}
                                 ref={inputRef}
                             />
-                            <Button type="submit" size="sm" disabled={isLoading || !chatInput.trim()}>
-                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
+                            <Button type="submit" size="sm" className="h-6 px-2 text-xs" disabled={isLoading || !chatInput.trim()}>
+                                {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Send"}
                             </Button>
                         </div>
 
                         {/* mention dropdown */}
                         {mentionActive && mentionSuggestions.length > 0 && (
-                            <div className="absolute left-3 bottom-full mb-1 bg-white border rounded shadow-lg w-56 max-h-60 overflow-y-auto z-20 text-sm">
+                            <div className="absolute left-2 bottom-full mb-1 bg-white border rounded shadow-lg w-48 max-h-48 overflow-y-auto z-20 text-xs">
                                 {mentionSuggestions.map((file, idx) => (
                                     <div key={file._id}
                                         className={`px-2 py-1 cursor-pointer ${idx === mentionIndex ? 'bg-blue-600 text-white' : 'hover:bg-gray-100'}`}

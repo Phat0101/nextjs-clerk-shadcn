@@ -1,17 +1,45 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { streamText, tool } from "ai";
-import { fetchAction } from "convex/nextjs";
+import { fetchAction, fetchMutation } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import { z } from "zod";
+import { Id } from "@/convex/_generated/dataModel";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export const runtime = "nodejs";
 
+// Helper to sanitize message for Convex storage
+function sanitizeMessage(message: any): any {
+  if (!message) return message;
+  return JSON.parse(JSON.stringify(message, (key, value) => {
+    if (value instanceof URL) return value.toString();
+    if (typeof value === 'function' || typeof value === 'symbol') return undefined;
+    return value;
+  }));
+}
+
+// Save a chat message to Convex
+async function saveMessage(jobId: string, message: any) {
+  try {
+    const sanitized = sanitizeMessage(message);
+    await fetchMutation(api.chat.addMessage, { jobId: jobId as Id<'jobs'>, message: sanitized });
+  } catch (e) {
+    console.error('persist chat message failed', e);
+  }
+}
+
 export async function POST(req: Request) {
-  const { clientName = "", fileUrls = [], messages = [] } = await req.json() as { clientName?: string; fileUrls: string[]; messages?: any[] };
+  const { clientName = "", fileUrls = [], messages = [], jobId } = await req.json() as { clientName?: string; fileUrls: string[]; messages?: any[]; jobId?: string };
   if (!Array.isArray(fileUrls) || fileUrls.length === 0) {
     return new Response("fileUrls array is required", { status: 400 });
+  }
+  // Persist latest user message if present
+  if (jobId && messages && messages.length > 0) {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.role === 'user') {
+      await saveMessage(jobId, lastMessage);
+    }
   }
 
   // Helper to detect images
@@ -182,6 +210,37 @@ Never invent template structures – only rely on tool results.`;
       matchTemplate,
       extractInvoice,
       analyzeInvoice,
+    },
+    onFinish: async ({ response }) => {
+      try {
+        if (jobId) {
+          for (const coreMessage of response.messages) {
+            if (coreMessage.role === 'assistant') {
+              let uiMessage: any;
+              if (typeof coreMessage.content === 'string') {
+                uiMessage = {
+                  id: coreMessage.id || `msg-${Date.now()}`,
+                  role: 'assistant',
+                  content: coreMessage.content,
+                  createdAt: new Date().toISOString(),
+                };
+              } else if (Array.isArray(coreMessage.content)) {
+                uiMessage = {
+                  id: coreMessage.id || `msg-${Date.now()}`,
+                  role: 'assistant',
+                  parts: coreMessage.content,
+                  createdAt: new Date().toISOString(),
+                };
+              }
+              if (uiMessage) {
+                await saveMessage(jobId, uiMessage);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to persist assistant message onFinish', e);
+      }
     },
   });
 

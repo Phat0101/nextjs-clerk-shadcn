@@ -38,22 +38,22 @@ function HeaderTable({ data, fields, onDataChange }: HeaderTableProps) {
   const fmt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
 
   return (
-    <div className="border rounded-lg overflow-x-auto text-xs">
+    <div className="border rounded-lg overflow-x-auto text-[10px]">
       <table className="w-full">
         <thead className="bg-gray-50">
           <tr>
-            <th className="p-2 text-left font-medium">Field</th>
-            <th className="p-2 text-left font-medium">Value</th>
+            <th className="p-1 text-left font-medium">Field</th>
+            <th className="p-1 text-left font-medium">Value</th>
           </tr>
         </thead>
         <tbody>
           {fields.map((f) => (
             <tr key={f.name} className="border-t">
-              <td className="p-2 whitespace-nowrap text-gray-800 border-r last:border-r-0">{f.label}</td>
-              <td className="p-2">
+              <td className="p-1 whitespace-nowrap text-gray-800 border-r last:border-r-0">{f.label}</td>
+              <td className="p-1">
                 {editing === f.name ? (
                   <input
-                    className="w-full text-xs bg-transparent outline-none border-none"
+                    className="w-full text-[10px] bg-transparent outline-none border-none"
                     type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
                     value={temp}
                     onChange={(e) => setTemp(e.target.value)}
@@ -104,12 +104,12 @@ function LineItemsTable({ items, fields, onItemsChange }: LineItemsTableProps) {
   const fmt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
 
   return (
-    <div className="border rounded-lg overflow-x-auto text-xs">
+    <div className="border rounded-lg overflow-x-auto text-[10px]">
       <table className="w-full">
         <thead className="bg-gray-50">
           <tr>
             {fields.map((f) => (
-              <th key={f.name} className="p-2 text-left font-medium whitespace-nowrap border-r last:border-r-0">
+              <th key={f.name} className="p-1 text-left font-medium whitespace-nowrap border-r last:border-r-0">
                 {f.label}
               </th>
             ))}
@@ -119,10 +119,10 @@ function LineItemsTable({ items, fields, onItemsChange }: LineItemsTableProps) {
           {items.map((row, idx) => (
             <tr key={idx} className="border-t">
               {fields.map((f) => (
-                <td key={f.name} className="p-2 whitespace-nowrap border-r last:border-r-0">
+                <td key={f.name} className="p-1 whitespace-nowrap border-r last:border-r-0">
                   {editingCell && editingCell.row === idx && editingCell.field === f.name ? (
                     <input
-                      className="w-full text-xs bg-transparent outline-none border-none focus-visible:ring-0 focus-visible:m-0 focus-visible:p-0"
+                      className="w-full text-[10px] bg-transparent outline-none border-none focus-visible:ring-0 focus-visible:m-0 focus-visible:p-0"
                       type={f.type === 'number' ? 'number' : 'text'}
                       value={temp}
                       onChange={(e) => setTemp(e.target.value)}
@@ -155,11 +155,11 @@ interface DataTableProps {
 
 export function DataTable({ headerData, lineItemsData, headerFields = [], lineItemFields = [], onChange, onExportCSV }: DataTableProps) {
   return (
-    <div className="space-y-3 text-sm max-h-[80vh] overflow-y-auto">
+    <div className="space-y-2 text-xs max-h-[75vh] overflow-y-auto pr-1">
       <div className="flex justify-between items-center">
-        <h3 className="font-semibold">Extracted Data</h3>
-        <Button onClick={onExportCSV} className="flex items-center gap-1 py-1 h-7 text-xs">
-          <Download className="w-3 h-3" />
+        <h3 className="font-semibold text-base">Extracted Data</h3>
+        <Button onClick={onExportCSV} className="flex items-center gap-1 py-1 h-6 text-[10px] px-2 rounded-sm">
+          <Download className="w-2 h-2" />
           Export CSV
         </Button>
       </div>

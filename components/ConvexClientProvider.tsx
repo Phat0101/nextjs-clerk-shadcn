@@ -7,7 +7,7 @@ import { useAuth } from "@clerk/nextjs";
 
 // const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-const convex = new ConvexReactClient("https://decisive-kudu-867.convex.cloud"); // TODO: remove this
+const convex = new ConvexReactClient("https://proper-firefly-836.convex.cloud"); // TODO: remove this
 
 export default function ConvexClientProvider({
   children,

@@ -1,6 +1,7 @@
-import { query, mutation, action, internalMutation } from "./_generated/server";
+import { query, mutation, action, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { Doc } from "./_generated/dataModel";
 
 // For Compilers: Fetch jobs that are available to be taken with commission pricing
 export const getAvailable = query({
@@ -55,6 +56,32 @@ export const getMyActive = query({
       .withIndex("by_compilerId", (q) => q.eq("compilerId", user._id))
       .filter((q) => q.eq(q.field("status"), "IN_PROGRESS"))
       .collect();
+  },
+});
+
+// For Compilers: Fetch jobs that are ready for review (AI processed, need human verification)
+export const getJobsReadyForReview = query({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+      
+    if (!user || user.role !== "COMPILER") return [];
+    
+    // Get jobs that are IN_PROGRESS but have no compiler assigned yet AND have extractedData
+    // These are jobs that were processed by AI but need human review
+    const jobs = await ctx.db
+      .query("jobs")
+      .withIndex("by_status", (q) => q.eq("status", "IN_PROGRESS"))
+      .filter((q) => q.eq(q.field("compilerId"), undefined))
+      .collect();
+
+    // Filter for jobs that have been processed by AI (have extractedData)
+    return jobs.filter(job => job.extractedData || job.templateFound);
   },
 });
 
@@ -158,6 +185,40 @@ export const getDetails = query({
         (user.clientId && job.clientId !== user.clientId)) {
       return null;
     }
+    
+    // Get all files for this job
+    const jobFiles = await ctx.db
+      .query("jobFiles")
+      .withIndex("by_jobId", (q) => q.eq("jobId", jobId))
+      .collect();
+
+    // Get file URLs
+    const filesWithUrls = await Promise.all(
+      jobFiles.map(async (file) => {
+        const fileUrl = await ctx.storage.getUrl(file.fileStorageId);
+        return {
+          ...file,
+          fileUrl,
+        };
+      })
+    );
+
+    // Fetch client info
+    const client = await ctx.db.get(job.clientId);
+
+    // Get price unit details
+    const priceUnit = await ctx.db.get(job.priceUnitId);
+
+    return { job, files: filesWithUrls, priceUnit, client };
+  },
+});
+
+// Internal query to get job details without auth (for auto-processing)
+export const getDetailsInternal = internalQuery({
+  args: { jobId: v.id("jobs") },
+  handler: async (ctx, { jobId }) => {
+    const job = await ctx.db.get(jobId);
+    if (!job) return null;
     
     // Get all files for this job
     const jobFiles = await ctx.db
@@ -310,6 +371,32 @@ export const acceptJob = mutation({
 
     await ctx.db.patch(jobId, {
       status: "IN_PROGRESS",
+      compilerId: user._id,
+    });
+  },
+});
+
+// Called by a Compiler to accept a job that's ready for review (AI processed)
+export const acceptReviewJob = mutation({
+  args: { jobId: v.id("jobs") },
+  handler: async (ctx, { jobId }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .unique();
+      
+    if (!user || user.role !== "COMPILER") throw new Error("Unauthorized");
+    
+    const job = await ctx.db.get(jobId);
+    if (!job) throw new Error("Job not found");
+    if (job.status !== "IN_PROGRESS") throw new Error("Job not ready for review");
+    if (job.compilerId) throw new Error("Job already assigned to another compiler");
+    if (!job.extractedData && !job.templateFound) throw new Error("Job has not been AI processed");
+
+    await ctx.db.patch(jobId, {
       compilerId: user._id,
     });
   },
@@ -515,6 +602,79 @@ export const updateCompilerStep = mutation({
   },
 });
 
+// Internal mutation to update compiler step without auth (for auto-processing)
+export const _updateCompilerStepInternal = internalMutation({
+  args: {
+    jobId: v.id("jobs"),
+    step: v.string(),
+    status: v.optional(v.union(v.literal("RECEIVED"), v.literal("IN_PROGRESS"), v.literal("COMPLETED"))),
+    analysisResult: v.optional(v.any()),
+    confirmedFields: v.optional(v.array(v.any())),
+    extractedData: v.optional(v.any()),
+    shipmentRegistrationExtractedData: v.optional(v.any()),
+    n10extractedData: v.optional(v.any()),
+    supplierName: v.optional(v.string()),
+    templateFound: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { jobId, step, status, analysisResult, confirmedFields, extractedData, shipmentRegistrationExtractedData, n10extractedData, supplierName, templateFound }) => {
+    // Get current job to preserve existing status if not provided
+    const currentJob = await ctx.db.get(jobId);
+    if (!currentJob) throw new Error("Job not found");
+    
+    await ctx.db.patch(jobId, {
+      compilerStep: step,
+      ...(status !== undefined ? { status } : {}),
+      ...(analysisResult !== undefined ? { analysisResult } : {}),
+      ...(confirmedFields !== undefined ? { confirmedFields } : {}),
+      ...(extractedData !== undefined ? { extractedData } : {}),
+      ...(shipmentRegistrationExtractedData !== undefined ? { shipmentRegistrationExtractedData } : {}),
+      ...(n10extractedData !== undefined ? { n10extractedData } : {}),
+      ...(supplierName !== undefined ? { supplierName } : {}),
+      ...(templateFound !== undefined ? { templateFound } : {}),
+    });
+  },
+});
+
+// Public action to update compiler step for auto-processing (bypasses auth)
+export const updateCompilerStepForAutoProcessing = action({
+  args: {
+    jobId: v.id("jobs"),
+    step: v.string(),
+    status: v.optional(v.union(v.literal("RECEIVED"), v.literal("IN_PROGRESS"), v.literal("COMPLETED"))),
+    analysisResult: v.optional(v.any()),
+    confirmedFields: v.optional(v.array(v.any())),
+    extractedData: v.optional(v.any()),
+    shipmentRegistrationExtractedData: v.optional(v.any()),
+    n10extractedData: v.optional(v.any()),
+    supplierName: v.optional(v.string()),
+    templateFound: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.runMutation(internal.jobs._updateCompilerStepInternal, args);
+  },
+});
+
+// Public action to get job details for auto-processing (bypasses auth)
+export const getJobDetailsForAutoProcessing = action({
+  args: { jobId: v.id("jobs") },
+  handler: async (ctx, { jobId }): Promise<{
+    job: Doc<"jobs">;
+    files: (Doc<"jobFiles"> & { fileUrl: string | null })[];
+    priceUnit: Doc<"priceUnits"> | null;
+    client: Doc<"clients"> | null;
+  } | null> => {
+    return await ctx.runQuery(internal.jobs.getDetailsInternal, { jobId });
+  },
+});
+
+// Public action to generate upload URL for auto-processing (bypasses auth)
+export const generateUploadUrlForAutoProcessing = action({
+  args: {},
+  handler: async (ctx): Promise<string> => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 // Append additional job files (used by classify pipeline)
 export const addJobFiles = mutation({
   args: {
@@ -647,7 +807,6 @@ function deepMerge(target: any, source: any): any {
   return output;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const _mergeShipmentRegistrationExtractedDataInternal = internalMutation({
   args: {
     jobId: v.id('jobs'),
@@ -673,7 +832,6 @@ export const _saveShipmentRegistrationExtractedDataInternal = internalMutation({
   },
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const _mergeN10ExtractedDataInternal = internalMutation({
   args: {
     jobId: v.id('jobs'),
@@ -700,7 +858,6 @@ export const _setN10ExtractedData = internalMutation({
 });
 
 // Legacy internal mutations - kept for backward compatibility
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const _mergeExtractedDataInternal = internalMutation({
   args: {
     jobId: v.id('jobs'),
@@ -723,5 +880,59 @@ export const _saveExtractedDataInternal = internalMutation({
   },
   handler: async (ctx, { jobId, data }) => {
     await ctx.db.patch(jobId, { extractedData: data });
+  },
+});
+
+// Auto-complete job (used by AI agent, bypasses auth)
+export const autoCompleteJob = action({
+  args: {
+    jobId: v.id("jobs"),
+    csvStorageId: v.string(),
+    headerFields: v.optional(v.array(v.any())),
+    lineItemFields: v.optional(v.array(v.any())),
+    extractedData: v.any(),
+  },
+  handler: async (ctx, { jobId, csvStorageId, headerFields, lineItemFields, extractedData }) => {
+    await ctx.runMutation(internal.jobs._autoCompleteJobInternal, {
+      jobId,
+      csvStorageId,
+      headerFields,
+      lineItemFields,
+      extractedData,
+    });
+  },
+});
+
+// Internal mutation for auto-completing jobs (no auth, internal only)
+export const _autoCompleteJobInternal = internalMutation({
+  args: {
+    jobId: v.id("jobs"),
+    csvStorageId: v.string(),
+    headerFields: v.optional(v.array(v.any())),
+    lineItemFields: v.optional(v.array(v.any())),
+    extractedData: v.any(),
+  },
+  handler: async (ctx, { jobId, csvStorageId, headerFields, lineItemFields, extractedData }) => {
+    const job = await ctx.db.get(jobId);
+    if (!job) throw new Error("Job not found");
+
+    // Store the job output record
+    await ctx.db.insert("jobOutputs", {
+      jobId,
+      csvStorageId,
+      headerFields,
+      lineItemFields,
+      extractedData,
+    });
+
+    // Generate a public URL for the CSV file to store on the job record for easy download
+    const csvUrl = (await ctx.storage.getUrl(csvStorageId)) ?? "";
+
+    await ctx.db.patch(jobId, {
+      status: "COMPLETED",
+      outputFileUrl: csvUrl,
+      completedAt: Date.now(),
+      compilerStep: "completed",
+    });
   },
 }); 
