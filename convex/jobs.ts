@@ -1,7 +1,7 @@
 import { query, mutation, action, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 
 // For Compilers: Fetch jobs that are available to be taken with commission pricing
 export const getAvailable = query({
@@ -672,6 +672,97 @@ export const generateUploadUrlForAutoProcessing = action({
   args: {},
   handler: async (ctx): Promise<string> => {
     return await ctx.storage.generateUploadUrl();
+  },
+});
+
+// Public action to create job for webhook processing (bypasses auth)
+export const createJobForWebhook = action({
+  args: { 
+    title: v.string(), 
+    priceUnitId: v.id("priceUnits"),
+    deadlineHours: v.number(),
+    clientId: v.id("clients"),
+    files: v.array(v.object({
+      fileName: v.string(),
+      fileStorageId: v.string(),
+      fileSize: v.optional(v.number()),
+      fileType: v.optional(v.string()),
+      documentType: v.optional(v.string()),
+      pageNumbers: v.optional(v.array(v.number())),
+      isCoreDocument: v.optional(v.boolean()),
+    }))
+  },
+  handler: async (ctx, { title, priceUnitId, deadlineHours, clientId, files }): Promise<Id<"jobs">> => {
+    return await ctx.runMutation(internal.jobs._createJobInternal, {
+      title,
+      priceUnitId,
+      deadlineHours,
+      clientId,
+      files,
+    });
+  },
+});
+
+// Internal mutation for creating jobs without auth
+export const _createJobInternal = internalMutation({
+  args: { 
+    title: v.string(), 
+    priceUnitId: v.id("priceUnits"),
+    deadlineHours: v.number(),
+    clientId: v.id("clients"),
+    files: v.array(v.object({
+      fileName: v.string(),
+      fileStorageId: v.string(),
+      fileSize: v.optional(v.number()),
+      fileType: v.optional(v.string()),
+      documentType: v.optional(v.string()),
+      pageNumbers: v.optional(v.array(v.number())),
+      isCoreDocument: v.optional(v.boolean()),
+    }))
+  },
+  handler: async (ctx, { title, priceUnitId, deadlineHours, clientId, files }) => {
+    // Get the price unit to calculate total price
+    const priceUnit = await ctx.db.get(priceUnitId);
+    if (!priceUnit || !priceUnit.isActive) {
+      throw new Error("Invalid or inactive price unit");
+    }
+
+    // Calculate total price (flat rate per job)
+    const totalPrice = priceUnit.amount;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jobType = (priceUnit as any).jobType || "INVOICE";
+
+    // Calculate deadline timestamp (current time + deadline hours)
+    const deadline = Date.now() + (deadlineHours * 60 * 60 * 1000);
+
+    // Create the job
+    const jobId = await ctx.db.insert("jobs", {
+      title,
+      jobType,
+      priceUnitId,
+      totalPrice,
+      clientId,
+      status: "RECEIVED",
+      deadline,
+      deadlineHours,
+    });
+    
+    // Create job file records
+    for (const file of files) {
+      await ctx.db.insert("jobFiles", {
+        jobId,
+        fileName: file.fileName,
+        fileStorageId: file.fileStorageId,
+        fileSize: file.fileSize,
+        fileType: file.fileType,
+        documentType: file.documentType,
+        pageNumbers: file.pageNumbers,
+        isCoreDocument: file.isCoreDocument,
+      });
+    }
+    
+    return jobId;
   },
 });
 

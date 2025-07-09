@@ -21,7 +21,8 @@ import {
   Briefcase,
   CheckSquare,
   BarChart3,
-  SquarePen
+  SquarePen,
+  Mail
 } from "lucide-react";
 
 interface SidebarProps {
@@ -136,6 +137,12 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
             label: "All Jobs",
             icon: FileText,
             active: currentView === "all-jobs"
+          },
+          {
+            id: "inbox",
+            label: "Inbox",
+            icon: Mail,
+            active: currentView === "inbox"
           },
           {
             id: "pricing",

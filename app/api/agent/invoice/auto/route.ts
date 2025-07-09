@@ -287,6 +287,9 @@ async function completeJobWithData(jobId: string, extractionResult: any, templat
     lineItemFields: template.lineItemFields,
     extractedData: extractionResult.extractedData,
   });
+
+  // Send completion email if this job is linked to an inbox email
+  await sendCompletionEmailIfNeeded(jobId, storageId);
 }
 
 // Helper to mark job for manual processing
@@ -320,4 +323,54 @@ async function saveExtractedDataForReview(jobId: string, extractionResult: any, 
   });
 
   console.log("Extracted data and analysis result saved for human review");
+}
+
+// Helper to send completion email if job is linked to inbox email
+async function sendCompletionEmailIfNeeded(jobId: string, csvStorageId: string) {
+  try {
+    console.log('🔍 Auto-processing: Checking if job is linked to inbox email:', jobId);
+    
+    // Get job details first for email context
+    const jobDetails = await fetchAction(api.jobs.getJobDetailsForAutoProcessing, { jobId: jobId as Id<"jobs"> });
+    
+    if (!jobDetails) {
+      console.log('❌ Auto-processing: Job details not found');
+      return;
+    }
+
+    // Check if job is linked to an inbox email using internal action
+    const linkedEmail = await fetchAction(api.inbox.checkJobLinkAction, { jobId: jobId as Id<"jobs"> });
+    
+    console.log('📧 Auto-processing: Linked email result:', linkedEmail ? 'Found' : 'Not found');
+    
+    if (linkedEmail) {
+      console.log('✅ Auto-processing: Job is linked to inbox email, sending completion email to:', linkedEmail.from);
+      
+      // Send completion email
+      const emailResponse = await fetch(new URL("/api/send-completion-email", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          csvStorageId,
+          inboxEmailId: linkedEmail._id,
+          recipientEmail: linkedEmail.from,
+          recipientName: linkedEmail.fromName,
+          subject: linkedEmail.subject,
+          jobTitle: jobDetails.job.title,
+        }),
+      });
+      
+      if (emailResponse.ok) {
+        console.log('✅ Auto-processing: Completion email sent successfully for auto-completed job:', jobId);
+      } else {
+        console.error('❌ Auto-processing: Failed to send completion email:', emailResponse.statusText);
+      }
+    } else {
+      console.log('ℹ️ Auto-processing: Job is not linked to any inbox email, skipping completion email');
+    }
+  } catch (error) {
+    console.error('💥 Auto-processing: Error checking/sending completion email:', error);
+    // Don't throw - email sending failure shouldn't break the auto-processing
+  }
 }

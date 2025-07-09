@@ -6,7 +6,15 @@ const isProtectedRoute = createRouteMatcher([
   "/admin(.*)",
 ]);
 
+const isInternalAPIRoute = createRouteMatcher([
+  "/api/send-completion-email",
+  "/api/postmark-webhook(.*)",
+]);
+
 export default clerkMiddleware(async (auth, req) => {
+  // Skip auth for internal API routes (called by Convex or external webhooks)
+  if (isInternalAPIRoute(req)) return;
+  
   if (isProtectedRoute(req)) await auth.protect();
 });
 

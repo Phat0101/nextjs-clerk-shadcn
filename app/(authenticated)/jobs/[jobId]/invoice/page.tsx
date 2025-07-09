@@ -48,6 +48,48 @@ type WorkflowStep =
   | "reviewing"
   | "completed";
 
+// Helper function to send completion email if job is linked to inbox email
+async function sendCompletionEmailIfNeeded(jobId: string, csvStorageId: string, linkedEmail: any, jobTitle?: string) {
+  try {
+    console.log('🔍 Checking completion email for job:', jobId);
+    console.log('📧 Linked email provided:', linkedEmail ? 'Found' : 'Not found');
+    
+    if (linkedEmail) {
+      console.log('📧 Email details:', { from: linkedEmail.from, subject: linkedEmail.subject });
+      console.log('✅ Job is linked to inbox email, sending completion email to:', linkedEmail.from);
+      
+      // Send completion email
+      const emailResponse = await fetch('/api/send-completion-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          csvStorageId,
+          inboxEmailId: linkedEmail._id,
+          recipientEmail: linkedEmail.from,
+          recipientName: linkedEmail.fromName,
+          subject: linkedEmail.subject,
+          jobTitle: jobTitle || `Job ${jobId}`,
+        }),
+      });
+      
+      if (emailResponse.ok) {
+        const emailResult = await emailResponse.json();
+        console.log('✅ Completion email sent successfully:', emailResult);
+      } else {
+        console.error('❌ Failed to send completion email:', emailResponse.status, emailResponse.statusText);
+        const errorText = await emailResponse.text();
+        console.error('❌ Email error details:', errorText);
+      }
+    } else {
+      console.log('ℹ️ Job is not linked to any inbox email, skipping completion email');
+    }
+  } catch (error) {
+    console.error('💥 Error checking/sending completion email:', error);
+    // Don't throw - email sending failure shouldn't break the job completion
+  }
+}
+
 export default function JobInvoicePage(props: any) {
   // Next.js 15: params is a Promise in client components – unwrap it
   const params = React.use(props.params) as { jobId: string };
@@ -84,6 +126,7 @@ export default function JobInvoicePage(props: any) {
   const jobDetails = useQuery(convexApi.jobs.getDetails, { jobId });
   const chatHistory = useQuery(convexApi.chat.getForJob, { jobId });
   const myActiveJobs = useQuery(convexApi.jobs.getMyActive);
+  const linkedEmail = useQuery(convexApi.inbox.checkJobLink, { jobId });
   const completeJob = useMutation(convexApi.jobs.completeJob);
   const generateUploadUrl = useMutation(convexApi.jobs.generateUploadUrl);
   const updateStep = useMutation(convexApi.jobs.updateCompilerStep);
@@ -552,6 +595,9 @@ export default function JobInvoicePage(props: any) {
         extractedData,
       });
 
+      // 5. Send completion email if this job is linked to an inbox email
+      await sendCompletionEmailIfNeeded(jobId, storageId, linkedEmail, jobDetails?.job.title);
+
       setCurrentStep("completed");
 
       // Redirect after a short delay
@@ -592,6 +638,21 @@ export default function JobInvoicePage(props: any) {
         ...prev,
         headerFields: prev.headerFields.map((f) => (f.name === fieldName ? { ...f, description: newDescription } : f)),
         lineItemFields: prev.lineItemFields.map((f) => (f.name === fieldName ? { ...f, description: newDescription } : f)),
+      };
+    });
+  };
+
+  const handleRequiredChange = (fieldName: string, newRequired: boolean) => {
+    setConfirmedFields((prev) =>
+      prev.map((f) => (f.name === fieldName ? { ...f, required: newRequired } : f))
+    );
+    // Also update in analysisResult
+    setAnalysisResult((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        headerFields: prev.headerFields.map((f) => (f.name === fieldName ? { ...f, required: newRequired } : f)),
+        lineItemFields: prev.lineItemFields.map((f) => (f.name === fieldName ? { ...f, required: newRequired } : f)),
       };
     });
   };
@@ -888,6 +949,7 @@ export default function JobInvoicePage(props: any) {
                       const selected = confirmedFields.some(f => f.name === field.name);
                       const fieldLabel = confirmedFields.find(f => f.name === field.name)?.label || field.label;
                       const fieldDescription = confirmedFields.find(f => f.name === field.name)?.description || field.description;
+                      const fieldRequired = confirmedFields.find(f => f.name === field.name)?.required ?? field.required;
                       return (
                         <tr key={field.name} className={selected ? "bg-gray-50" : "hover:bg-gray-25"}>
                           <td className="w-10 p-1 border-b text-center">
@@ -905,7 +967,14 @@ export default function JobInvoicePage(props: any) {
                             </div>
                           </td>
                           <td className="w-16 p-1 border-b"><Badge variant="outline" className="text-[10px] px-1">{field.type}</Badge></td>
-                          <td className="w-16 p-1 border-b text-center">{field.required ? "✓" : ""}</td>
+                          <td className="w-16 p-1 border-b text-center">
+                            <input
+                              type="checkbox"
+                              checked={fieldRequired}
+                              onChange={(e) => handleRequiredChange(field.name, e.target.checked)}
+                              className="w-3 h-3 cursor-pointer"
+                            />
+                          </td>
                           <td className="p-1 border-b">
                             <div
                               contentEditable
@@ -1025,30 +1094,29 @@ export default function JobInvoicePage(props: any) {
                     )}
                   </tbody>
                 </table>
+                {/* Add Field Button */}
+                {!(fieldsTab === "header" ? showAddHeader : showAddLine) && (
+                  <div className="m-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (fieldsTab === "header") {
+                          setShowAddHeader(true);
+                        } else {
+                          setShowAddLine(true);
+                        }
+                      }}
+                      className="w-full text-xs h-6 rounded-sm "
+                    >
+                      + Add {fieldsTab === "header" ? "Header" : "Line Item"} Field
+                    </Button>
+                  </div>
+                )}
               </div>
 
-              {/* Add Field Button */}
-              {!(fieldsTab === "header" ? showAddHeader : showAddLine) && (
-                <div className="mt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (fieldsTab === "header") {
-                        setShowAddHeader(true);
-                      } else {
-                        setShowAddLine(true);
-                      }
-                    }}
-                    className="w-full text-xs h-6"
-                  >
-                    + Add {fieldsTab === "header" ? "Header" : "Line Item"} Field
-                  </Button>
-                </div>
-              )}
-
               {/* Actions */}
-              <div className="space-y-1 mt-2">
+              <div className="space-y-1 my-2">
                 <Button
                   variant="outline"
                   onClick={handleSaveTemplate}

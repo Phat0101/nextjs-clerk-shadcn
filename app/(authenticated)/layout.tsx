@@ -86,6 +86,9 @@ export default function AuthenticatedLayout({
       case "commission-settings":
         router.push("/dashboard?view=commission-settings");
         break;
+      case "inbox":
+        router.push("/dashboard?view=inbox");
+        break;
       case "completed-jobs":
         router.push("/dashboard?view=completed-jobs");
         break;

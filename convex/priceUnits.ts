@@ -1,5 +1,7 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation, action } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 
 // Get all active price units (available to clients)
 export const getActive = query({
@@ -132,5 +134,101 @@ export const getById = query({
   args: { id: v.id("priceUnits") },
   handler: async (ctx, { id }) => {
     return await ctx.db.get(id);
+  },
+});
+
+// Get or create $0 price unit for webhook processing (internal)
+export const getOrCreateWebhookPriceUnit = internalMutation({
+  args: { 
+    jobType: v.union(
+      v.literal("INVOICE"),
+      v.literal("SHIPMENT"),
+      v.literal("N10")
+    ),
+    systemUserId: v.id("users"), // System user to assign as creator
+  },
+  handler: async (ctx, { jobType, systemUserId }) => {
+    // Look for existing $0 price unit for this job type
+    const existingUnit = await ctx.db
+      .query("priceUnits")
+      .filter((q) => 
+        q.and(
+          q.eq(q.field("jobType"), jobType),
+          q.eq(q.field("amount"), 0),
+          q.eq(q.field("isActive"), true)
+        )
+      )
+      .first();
+    
+    if (existingUnit) {
+      return existingUnit._id;
+    }
+
+    // Create new $0 price unit
+    const priceUnitId = await ctx.db.insert("priceUnits", {
+      name: `Email ${jobType} Processing (Free)`,
+      description: `Automated ${jobType.toLowerCase()} processing from email - no charge`,
+      amount: 0, // $0.00
+      currency: "AUD",
+      jobType,
+      isActive: true,
+      createdBy: systemUserId,
+    });
+    
+    return priceUnitId;
+  },
+});
+
+// Find system user or create one (internal)
+export const getOrCreateSystemUser = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    // Look for existing system user
+    const systemUser = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("email"), "system@webhook.internal"))
+      .first();
+    
+    if (systemUser) {
+      return systemUser._id;
+    }
+
+    // Create system client first
+    const clientId = await ctx.db.insert("clients", { 
+      name: "System Webhook Client" 
+    });
+    
+    // Create system user
+    const userId = await ctx.db.insert("users", {
+      clerkId: "system:webhook:internal",
+      email: "system@webhook.internal",
+      name: "System Webhook User",
+      role: "ADMIN", // Give admin role so it can create price units
+      clientId,
+    });
+    
+    return userId;
+  },
+});
+
+// Public actions for webhook use
+export const getOrCreateSystemUserAction = action({
+  args: {},
+  handler: async (ctx): Promise<Id<"users">> => {
+    return await ctx.runMutation(internal.priceUnits.getOrCreateSystemUser, {});
+  },
+});
+
+export const getOrCreateWebhookPriceUnitAction = action({
+  args: { 
+    jobType: v.union(
+      v.literal("INVOICE"),
+      v.literal("SHIPMENT"),
+      v.literal("N10")
+    ),
+    systemUserId: v.id("users"),
+  },
+  handler: async (ctx, { jobType, systemUserId }): Promise<Id<"priceUnits">> => {
+    return await ctx.runMutation(internal.priceUnits.getOrCreateWebhookPriceUnit, { jobType, systemUserId });
   },
 }); 

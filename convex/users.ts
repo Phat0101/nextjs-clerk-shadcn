@@ -1,5 +1,7 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation, action } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { Doc } from "./_generated/dataModel";
 
 // Get current user details from the DB
 export const getCurrent = query({
@@ -90,5 +92,69 @@ export const getAll = query({
     
     // For testing: allow all users to see user list
     return await ctx.db.query("users").collect();
+  },
+});
+
+// Find user by email address (internal, used by webhooks)
+export const findByEmail = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    return await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("email"), email))
+      .first();
+  },
+});
+
+// Create user by email for webhook processing (internal)
+export const createFromEmail = internalMutation({
+  args: { 
+    email: v.string(),
+    name: v.optional(v.string()),
+  },
+  handler: async (ctx, { email, name }) => {
+    // Check if user already exists
+    const existingUser = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("email"), email))
+      .first();
+    
+    if (existingUser) {
+      return existingUser;
+    }
+
+    // Create client first
+    const clientId = await ctx.db.insert("clients", { 
+      name: `${name || email} Company PTY LTD` 
+    });
+    
+    // Create user with a dummy clerkId since this comes from email
+    const userId = await ctx.db.insert("users", {
+      clerkId: `email:${email}:${Date.now()}`, // Unique identifier for email-created users
+      email,
+      name: name || email.split('@')[0], // Use email prefix as name if no name provided
+      role: "CLIENT", // Default role
+      clientId,
+    });
+    
+    return await ctx.db.get(userId);
+  },
+});
+
+// Public actions for webhook use
+export const findByEmailAction = action({
+  args: { email: v.string() },
+  handler: async (ctx, { email }): Promise<Doc<"users"> | null> => {
+    return await ctx.runQuery(internal.users.findByEmail, { email });
+  },
+});
+
+export const createFromEmailAction = action({
+  args: { 
+    email: v.string(),
+    name: v.optional(v.string()),
+  },
+  handler: async (ctx, { email, name }): Promise<Doc<"users"> | null> => {
+    return await ctx.runMutation(internal.users.createFromEmail, { email, name });
   },
 }); 

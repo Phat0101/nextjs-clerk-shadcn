@@ -130,4 +130,51 @@ export default defineSchema({
       dimensions: 1536,
       vectorField: "embedding",
     }),
+
+  // Inbox for managing inbound and outbound emails
+  inbox: defineTable({
+    type: v.union(v.literal("inbound"), v.literal("outbound")), // Email direction
+    from: v.string(),
+    fromName: v.optional(v.string()),
+    to: v.string(),
+    toFull: v.array(v.object({
+      email: v.string(),
+      name: v.optional(v.string()),
+      mailboxHash: v.optional(v.string()),
+    })),
+    subject: v.optional(v.string()),
+    textBody: v.optional(v.string()),
+    htmlBody: v.optional(v.string()),
+    messageId: v.string(),
+    date: v.string(),
+    attachments: v.array(v.object({
+      name: v.string(),
+      contentType: v.string(),
+      contentLength: v.number(),
+      storageId: v.optional(v.string()), // Convex storage ID if uploaded
+    })),
+    status: v.union(
+      v.literal("unread"),
+      v.literal("read"),
+      v.literal("processed"),
+      v.literal("archived"),
+      v.literal("sent"), // For outbound emails
+      v.literal("failed") // For failed outbound emails
+    ),
+    jobId: v.optional(v.id("jobs")), // Link to created job if any
+    createdAt: v.number(),
+    readAt: v.optional(v.number()),
+    processedAt: v.optional(v.number()),
+    sentAt: v.optional(v.number()), // When outbound email was sent
+    // Additional fields for outbound email tracking
+    recipientEmail: v.optional(v.string()), // Primary recipient for outbound emails
+    emailService: v.optional(v.string()), // "postmark", etc.
+    errorMessage: v.optional(v.string()), // Error message if sending failed
+  })
+    .index("by_status", ["status"])
+    .index("by_type", ["type"])
+    .index("by_date", ["date"])
+    .index("by_from", ["from"])
+    .index("by_messageId", ["messageId"])
+    .index("by_type_status", ["type", "status"]),
 });
