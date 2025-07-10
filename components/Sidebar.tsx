@@ -36,7 +36,6 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
   const ensureUser = useMutation(api.users.ensureUser);
   const updateRole = useMutation(api.users.updateRole);
   const [collapsed, setCollapsed] = React.useState(true);
-  // Track whether the role select dropdown is open to avoid collapsing during interaction
   const [selectOpen, setSelectOpen] = React.useState(false);
 
   // Ensure user exists on component mount
@@ -61,13 +60,15 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
 
   if (!currentUser) {
     return (
-      <div className="w-64 bg-gray-50 border-r border-gray-200 h-screen p-4">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded mb-4"></div>
-          <div className="space-y-2">
-            <div className="h-4 bg-gray-200 rounded"></div>
-            <div className="h-4 bg-gray-200 rounded"></div>
-            <div className="h-4 bg-gray-200 rounded"></div>
+      <div className="w-[280px] bg-gray-50 border-r border-gray-200 h-screen">
+        <div className="p-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-10 bg-gray-200 rounded-lg"></div>
+            <div className="space-y-3">
+              <div className="h-4 bg-gray-200 rounded"></div>
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -185,109 +186,96 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
 
   return (
     <div
-      className={`z-50 fixed top-0 left-0 bg-white border-r border-gray-200 h-screen flex flex-col transition-all duration-200 ${collapsed ? 'w-16' : 'w-64'}`}
+      className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 flex flex-col transition-all duration-200 ease-out z-50 ${
+        collapsed ? 'w-16' : 'w-[280px]'
+      }`}
       onMouseEnter={() => setCollapsed(false)}
       onMouseLeave={() => {
         if (!selectOpen) setCollapsed(true);
       }}
     >
       {/* Header */}
-      <div className="p-4 border-gray-200 flex flex-col gap-3">
-        {/* Top row with logo only – sidebar expands via hover */}
+      <div className={`border-b border-gray-200 p-3`}>
         <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
-          <div className={`w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center ${collapsed ? 'h-4 w-4 p-2 mr-1' : ''}`}>
-            <span className="text-white font-bold text-sm">CF</span>
+          {/* Logo */}
+          <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
+            <div className="w-9 h-9 bg-[#034737] rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">OBO</span>
+            </div>
+            {!collapsed && (
+              <div className="text-lg font-semibold text-gray-900">
+                Clear.ai
+              </div>
+            )}
           </div>
         </div>
-
-        {!collapsed && (
-          <>
-            {/* Role Switcher for Testing */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                  Current Role
-                </span>
-                <Badge variant={currentUser.role === "ADMIN" ? "default" : "secondary"}>
-                  {currentUser.role}
-                </Badge>
-              </div>
-              <Select
-                value={currentUser.role}
-                onValueChange={(val) => {
-                  handleRoleChange(val as "CLIENT" | "COMPILER" | "ADMIN");
-                }}
-                onOpenChange={(open: boolean) => setSelectOpen(open)}
-              >
-                <SelectTrigger className="w-full h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CLIENT">CLIENT</SelectItem>
-                  <SelectItem value="COMPILER">COMPILER</SelectItem>
-                  <SelectItem value="ADMIN">ADMIN</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        )}
       </div>
 
       {/* Navigation */}
-      <div className={`flex-1 ${collapsed ? 'p-1' : 'p-4'}`}>
-        <div className="space-y-1">
+      <div className={`flex-1 overflow-y-auto py-4 px-2`}>
+        <nav className="space-y-2">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             return (
               <button
                 key={item.id}
                 onClick={() => onViewChange(item.id)}
-                className={
-                  `w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                  ${item.active ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`
-                }
+                className={`
+                  w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm font-medium transition-all duration-200 group
+                  justify-self-auto
+                  ${item.active 
+                    ? 'bg-gray-100 text-gray-900 border border-gray-200' 
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 focus:bg-gray-50 focus:text-gray-900'
+                  }
+                  focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2
+                `}
               >
-                <Icon className="w-4 h-4" />
-                {!collapsed && item.label}
+                <Icon className="w-4 ml-1.5 flex-shrink-0" />
+                {!collapsed && (
+                  <span className="truncate">{item.label}</span>
+                )}
+                {collapsed && (
+                  <span className="sr-only">{item.label}</span>
+                )}
               </button>
             );
           })}
-        </div>
+        </nav>
       </div>
 
       {/* Dashboard Summary for Clients */}
       {!collapsed && currentUser.role === "CLIENT" && stats && (
-        <div className="p-4 border-t border-gray-200">
-          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+        <div className="border-t border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
             Dashboard Summary
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-xs text-gray-600">Jobs Done</span>
+              <span className="text-sm text-gray-600">Jobs Done</span>
               <span className="text-sm font-semibold text-green-600">{stats.completedJobs}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-xs text-gray-600">Total Spent</span>
-              <span className="text-sm font-semibold text-blue-600">
+              <span className="text-sm text-gray-600">Total Spent</span>
+              <span className="text-sm font-semibold text-[#034737]">
                 ${((stats.totalCost || 0) / 100).toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-xs text-gray-600">Avg. Cost</span>
-              <span className="text-sm font-semibold text-purple-600">
+              <span className="text-sm text-gray-600">Avg. Cost</span>
+              <span className="text-sm font-semibold text-blue-600">
                 ${((stats.averageCost || 0) / 100).toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-xs text-gray-600">Avg. Time</span>
+              <span className="text-sm text-gray-600">Avg. Time</span>
               <span className="text-sm font-semibold text-orange-600">
                 {(stats.averageCompletionTime ?? 0).toFixed(1)}h
               </span>
             </div>
             {((stats.pendingJobs || 0) > 0 || (stats.inProgressJobs || 0) > 0) && (
-              <div className="pt-2 border-t border-gray-100">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-orange-600">Pending: {stats.pendingJobs || 0}</span>
+              <div className="pt-3 border-t border-gray-100">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-amber-600">Pending: {stats.pendingJobs || 0}</span>
                   <span className="text-blue-600">In Progress: {stats.inProgressJobs || 0}</span>
                 </div>
               </div>
@@ -296,18 +284,59 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
         </div>
       )}
 
-      {/* User Profile */}
-      <div className="p-4 border-t border-gray-200">
-        <div className="flex items-center gap-3">
-          <UserButton />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
-              {currentUser.name}
-            </p>
-            <p className="text-xs text-gray-500 truncate">
-              {currentUser.email}
-            </p>
+      {/* Bottom Section – Role selection & User Profile */}
+      <div className="border-t border-gray-200 p-4 space-y-4">
+        {/* Role Section - Only show when expanded */}
+        {!collapsed && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Current Role
+              </span>
+              <Badge 
+                variant={currentUser.role === "ADMIN" ? "default" : "secondary"}
+                className="text-xs font-medium"
+              >
+                {currentUser.role}
+              </Badge>
+            </div>
+            <Select
+              value={currentUser.role}
+              onValueChange={(val) => {
+                handleRoleChange(val as "CLIENT" | "COMPILER" | "ADMIN");
+              }}
+              onOpenChange={(open: boolean) => setSelectOpen(open)}
+            >
+              <SelectTrigger className="w-full h-8 text-sm border-gray-300 focus:ring-2 focus:ring-[#034737] focus:border-transparent">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CLIENT">CLIENT</SelectItem>
+                <SelectItem value="COMPILER">COMPILER</SelectItem>
+                <SelectItem value="ADMIN">ADMIN</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <UserButton 
+            appearance={{
+              elements: {
+                avatarBox: "w-8 h-8"
+              }
+            }}
+          />
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {currentUser.name}
+              </p>
+              <p className="text-xs text-gray-500 truncate">
+                {currentUser.email}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

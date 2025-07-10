@@ -329,7 +329,8 @@ export const checkJobLinkInternal = internalQuery({
         const linkedEmail = await ctx.db
             .query("inbox")
             .filter((q) => q.eq(q.field("jobId"), jobId))
-            .unique();
+            .order("desc")
+            .first();
 
         console.log('📧 Internal: Linked email search result:', linkedEmail ? 'Found' : 'Not found');
         if (linkedEmail) {
@@ -395,7 +396,8 @@ export const checkJobLink = query({
         const linkedEmail = await ctx.db
             .query("inbox")
             .filter((q) => q.eq(q.field("jobId"), jobId))
-            .unique();
+            .order("desc")
+            .first();
 
         console.log('📧 Convex: Linked email search result:', linkedEmail ? 'Found' : 'Not found');
         if (linkedEmail) {

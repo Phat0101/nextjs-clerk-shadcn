@@ -63,8 +63,8 @@ Please find the extracted data attached as a CSV file.
 
 If you have any questions about the extracted data or need any modifications, please don't hesitate to contact us.
 
-Best regards,
-The Clear.ai Team
+Cheers,
+Clear.ai
     `.trim();
 
     const fromEmail = process.env.POSTMARK_FROM_EMAIL || 'noreply@compileflow.com';

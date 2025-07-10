@@ -938,9 +938,8 @@ export default function JobInvoicePage(props: any) {
                   <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr className="text-left">
                       <th className="w-10 p-1 border-b text-center">✓</th>
-                      <th className="w-32 p-1 border-b">Label</th>
+                      <th className="w-44 p-1 border-b">Label</th>
                       <th className="w-16 p-1 border-b">Type</th>
-                      <th className="w-16 p-1 border-b">Required</th>
                       <th className="p-1 border-b">Description</th>
                     </tr>
                   </thead>
@@ -955,7 +954,7 @@ export default function JobInvoicePage(props: any) {
                           <td className="w-10 p-1 border-b text-center">
                             <div onClick={() => handleFieldToggle(field.name)} className={`w-3 h-3 rounded border-2 mx-auto cursor-pointer flex items-center justify-center ${selected ? "bg-blue-600 border-blue-600" : "border-gray-300"}`}>{selected && <CheckCircle className="w-2 h-2 text-white" />}</div>
                           </td>
-                          <td className="w-32 p-1 border-b">
+                          <td className="w-44 p-1 border-b">
                             <div
                               contentEditable
                               suppressContentEditableWarning
@@ -967,14 +966,6 @@ export default function JobInvoicePage(props: any) {
                             </div>
                           </td>
                           <td className="w-16 p-1 border-b"><Badge variant="outline" className="text-[10px] px-1">{field.type}</Badge></td>
-                          <td className="w-16 p-1 border-b text-center">
-                            <input
-                              type="checkbox"
-                              checked={fieldRequired}
-                              onChange={(e) => handleRequiredChange(field.name, e.target.checked)}
-                              className="w-3 h-3 cursor-pointer"
-                            />
-                          </td>
                           <td className="p-1 border-b">
                             <div
                               contentEditable
@@ -1010,7 +1001,7 @@ export default function JobInvoicePage(props: any) {
                               }
                             }}
                             placeholder="Field label"
-                            className="h-5 text-xs"
+                            className="h-5 text-xs rounded"
                           />
                         </td>
                         <td className="w-16 p-1 border-b">
@@ -1024,7 +1015,7 @@ export default function JobInvoicePage(props: any) {
                               }
                             }}
                           >
-                            <SelectTrigger className="h-5 text-[10px]">
+                            <SelectTrigger className="h-5 text-[10px] p-1 font-normal">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1033,21 +1024,6 @@ export default function JobInvoicePage(props: any) {
                               <SelectItem value="date">Date</SelectItem>
                             </SelectContent>
                           </Select>
-                        </td>
-                        <td className="w-16 p-1 border-b text-center">
-                          <input
-                            type="checkbox"
-                            checked={fieldsTab === "header" ? newHeaderField.required : newLineField.required}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              if (fieldsTab === "header") {
-                                setNewHeaderField(prev => ({ ...prev, required: checked }));
-                              } else {
-                                setNewLineField(prev => ({ ...prev, required: checked }));
-                              }
-                            }}
-                            className="w-3 h-3"
-                          />
                         </td>
                         <td className="p-1 border-b">
                           <div className="flex gap-1">
@@ -1062,7 +1038,7 @@ export default function JobInvoicePage(props: any) {
                                 }
                               }}
                               placeholder="Field description"
-                              className="h-5 text-[10px] flex-1"
+                              className="h-4 text-[10px] flex-1 rounded"
                             />
                             <Button
                               variant="ghost"
@@ -1092,6 +1068,7 @@ export default function JobInvoicePage(props: any) {
                         </td>
                       </tr>
                     )}
+
                   </tbody>
                 </table>
                 {/* Add Field Button */}
@@ -1113,6 +1090,7 @@ export default function JobInvoicePage(props: any) {
                     </Button>
                   </div>
                 )}
+
               </div>
 
               {/* Actions */}
