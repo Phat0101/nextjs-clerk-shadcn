@@ -20,6 +20,7 @@ import {
   Type,
   Schema as GenaiSchema,
 } from "@google/genai";
+import { PDFDocument } from "pdf-lib";
 
 interface ConfirmedField {
   name: string;
@@ -55,54 +56,21 @@ const buildProperties = (fields: ConfirmedField[]): Record<string, GenaiSchema> 
   return map;
 };
 
-// Retry wrapper for Gemini API calls
-const retryGeminiCall = async (callFn: () => Promise<any>, maxRetries = 3, baseDelay = 2000): Promise<any> => {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await callFn();
-    } catch (error: any) {
-      console.error(`Gemini API attempt ${attempt} failed:`, error?.message || error);
-      
-      if (attempt === maxRetries) {
-        throw error;
-      }
-      
-      // Exponential backoff: 2s, 4s, 8s
-      const delay = baseDelay * Math.pow(2, attempt - 1);
-      console.log(`Retrying in ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-};
-
 // Upload a blob to the File API and wait until it is processed
 const uploadFileAndWait = async (blob: Blob, displayName: string): Promise<{ uri: string; mimeType: string }> => {
-  return await retryGeminiCall(async () => {
-    const file = await ai.files.upload({
-      file: blob,
-      config: { displayName },
-    });
-
-    // Poll until state !== PROCESSING (with timeout)
-    let current = await ai.files.get({ name: file.name as string });
-    let pollCount = 0;
-    const maxPolls = 24; // 2 minutes max (24 * 5s)
-    
-    while (current.state === "PROCESSING" && pollCount < maxPolls) {
-      await new Promise((r) => setTimeout(r, 5000));
-      current = await ai.files.get({ name: file.name as string });
-      pollCount++;
-    }
-    
-    if (current.state === "PROCESSING") {
-      throw new Error(`File ${displayName} processing timed out after 2 minutes`);
-    }
-    if (current.state === "FAILED") {
-      throw new Error(`File ${displayName} processing failed`);
-    }
-    
-    return { uri: current.uri as string, mimeType: current.mimeType as string };
+  const file = await ai.files.upload({
+    file: blob,
+    config: { displayName },
   });
+
+  // Poll until state !== PROCESSING
+  let current = await ai.files.get({ name: file.name as string });
+  while (current.state === "PROCESSING") {
+    await new Promise((r) => setTimeout(r, 5000));
+    current = await ai.files.get({ name: file.name as string });
+  }
+  if (current.state === "FAILED") throw new Error(`File ${displayName} processing failed`);
+  return { uri: current.uri as string, mimeType: current.mimeType as string };
 };
 
 export async function POST(request: NextRequest) {
@@ -111,8 +79,7 @@ export async function POST(request: NextRequest) {
 
     let headerFieldsInput: ConfirmedField[] = [];
     let lineItemFieldsInput: ConfirmedField[] = [];
-    interface UploadedFile { uri?: string; mimeType?: string }
-    const uploadedFiles: UploadedFile[] = [];
+    const sourceFiles: File[] = [];
 
     // -------------------------------------------------------------
     // multipart/form-data branch
@@ -127,13 +94,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "No files provided." }, { status: 400 });
       }
 
-      for (const f of files) {
-        const blob = new Blob([await f.arrayBuffer()], { type: f.type });
-        const processed = await uploadFileAndWait(blob, f.name);
-        if (processed.uri && processed.mimeType) {
-          uploadedFiles.push({ uri: processed.uri as string, mimeType: processed.mimeType as string });
-        }
-      }
+      files.forEach((f) => sourceFiles.push(f));
     } else {
       // -----------------------------------------------------------
       // JSON body branch (remote URLs)
@@ -152,11 +113,8 @@ export async function POST(request: NextRequest) {
         if (!resp.ok) throw new Error(`Failed to fetch ${url}`);
         const arrayBuf = await resp.arrayBuffer();
         const mimeType = resp.headers.get("content-type") || "application/pdf";
-        const blob = new Blob([arrayBuf], { type: mimeType });
-        const processed = await uploadFileAndWait(blob, `remote-${i + 1}`);
-        if (processed.uri && processed.mimeType) {
-          uploadedFiles.push({ uri: processed.uri as string, mimeType: processed.mimeType as string });
-        }
+        const fileObj = new File([arrayBuf], url.split("/").pop() || `remote-${i + 1}.pdf`, { type: mimeType });
+        sourceFiles.push(fileObj);
       }
     }
 
@@ -190,7 +148,7 @@ export async function POST(request: NextRequest) {
     // -------------------------------------------------------------
     // Construct contents array: prompt + file parts
     // -------------------------------------------------------------
-    const totalFiles = uploadedFiles.length;
+    const totalFiles = sourceFiles.length;
 
     const headerDescriptions = headerFieldsInput
       .map(
@@ -217,48 +175,86 @@ ${lineItemDescriptions}
 Make sure to include all the line items in the invoice by either checking the invoice header or number of line items.
 
 IMPORTANT – The \`lineItems\` array MUST contain **one entry for EVERY single line-item row** present in the invoice's item table. Do NOT summarise, collapse, or omit rows – the array length must exactly equal the number of rows you detect (274 rows ➜ 274 objects).
-IMPORTANT - All field values should be strictly extracted from the document, and not made up.
-IMPORTANT - Be careful about misplacement in a table, review the table carefully.
 
 If the document spans multiple pages or the table is very long, continue until **all** rows are included. It is acceptable if the final JSON is very large.
 
 Return JSON matching the provided response schema with the complete \`lineItems\` array.`;
 
-    const contents: any[] = [systemPrompt];
-    uploadedFiles.forEach((f) => {
-      if (f.uri && f.mimeType) {
-        contents.push(createPartFromUri(f.uri as string, f.mimeType as string));
-      }
-    });
+    // -------------------------------------------------------------
+    // Split PDFs into overlapping 3-page windows and extract per chunk
+    // -------------------------------------------------------------
 
-    // -------------------------------------------------------------
-    // Generate content with structured output
-    // -------------------------------------------------------------
-    const response = await retryGeminiCall(async () => {
-      return await ai.models.generateContent({
+    let mergedHeader: any = null;
+    const mergedLineItems: any[] = [];
+    const dedup = new Set<string>();
+
+    const extractChunk = async (bytes: Uint8Array, displayName: string) => {
+      const processed = await uploadFileAndWait(new Blob([bytes], { type: "application/pdf" }), displayName);
+      const contentsChunk: any[] = [systemPrompt, createPartFromUri(processed.uri, processed.mimeType)];
+      console.log("Calling Gemini on", displayName);
+      const res = await ai.models.generateContent({
         model: "gemini-2.5-pro",
-        contents,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: dynamicSchema,
-          thinkingConfig: {
-            thinkingBudget: 2000, 
-            includeThoughts: true, // Disable to reduce response time
-          },
-          temperature: 0.0,
-        },
+        contents: contentsChunk,
+        config: { responseMimeType: "application/json", responseSchema: dynamicSchema },
       });
-    });
+      try {
+        return JSON.parse(res.text as string);
+      } catch {
+        console.warn("Unparsable JSON for", displayName);
+        return null;
+      }
+    };
 
-    let extractedData: any = null;
-    try {
-      extractedData = JSON.parse(response.text as string);
-    } catch {
-      // If parsing fails, return raw text for debugging
-      extractedData = response.text;
+    for (const file of sourceFiles) {
+      if ((file.type || "").includes("pdf")) {
+        const originalBuf = await file.arrayBuffer();
+        const pdfDoc = await PDFDocument.load(originalBuf);
+        const pages = pdfDoc.getPageCount();
+        for (let start = 0; start < pages; start += 2) {
+          const end = Math.min(start + 3, pages);
+          const newPdf = await PDFDocument.create();
+          const indices = Array.from({ length: end - start }, (_, i) => start + i);
+          const copied = await newPdf.copyPages(pdfDoc, indices);
+          copied.forEach((p) => newPdf.addPage(p));
+          const chunkBytes = await newPdf.save();
+          const chunkName = `${file.name}-p${start + 1}-${end}`;
+          console.log(`Chunk ${chunkName} pages ${start + 1}-${end}`);
+          const data = await extractChunk(chunkBytes, chunkName);
+          if (data) {
+            if (!mergedHeader) mergedHeader = data.header;
+            (data.lineItems || []).forEach((li: any) => {
+              const key = JSON.stringify(li);
+              if (!dedup.has(key)) {
+                dedup.add(key);
+                mergedLineItems.push(li);
+              }
+            });
+            console.log(`→ extracted ${data.lineItems?.length || 0} rows`);
+          }
+        }
+      } else {
+        // Non-PDF (image) – single extraction
+        const buf = await file.arrayBuffer();
+        const processed = await uploadFileAndWait(new Blob([buf], { type: file.type }), file.name);
+        const contentsImg: any[] = [systemPrompt, createPartFromUri(processed.uri, processed.mimeType)];
+        const res = await ai.models.generateContent({
+          model: "gemini-2.5-pro",
+          contents: contentsImg,
+          config: { responseMimeType: "application/json", responseSchema: dynamicSchema },
+        });
+        const data = JSON.parse(res.text as string);
+        if (!mergedHeader) mergedHeader = data.header;
+        (data.lineItems || []).forEach((li: any) => {
+          const key = JSON.stringify(li);
+          if (!dedup.has(key)) {
+            dedup.add(key);
+            mergedLineItems.push(li);
+          }
+        });
+      }
     }
 
-    console.log(response.usageMetadata);
+    const extractedData = { header: mergedHeader || {}, lineItems: mergedLineItems };
 
     return NextResponse.json({
       extractedData,
@@ -269,29 +265,6 @@ Return JSON matching the provided response schema with the complete \`lineItems\
     });
   } catch (error) {
     console.error("Error extracting data:", error);
-    
-    // Provide more specific error messages
-    let errorMessage = "Extraction failed";
-    let statusCode = 500;
-    
-    if (error instanceof Error) {
-      if (error.message.includes("fetch failed") || error.message.includes("network")) {
-        errorMessage = "Network error: Unable to connect to AI service. Please try again.";
-        statusCode = 503; // Service Unavailable
-      } else if (error.message.includes("timeout") || error.message.includes("timed out")) {
-        errorMessage = "Request timed out: Document processing took too long. Try with smaller files.";
-        statusCode = 408; // Request Timeout
-      } else if (error.message.includes("processing failed")) {
-        errorMessage = "File processing failed: Unable to process one or more uploaded files.";
-        statusCode = 422; // Unprocessable Entity
-      } else if (error.message.includes("rate limit") || error.message.includes("quota")) {
-        errorMessage = "Rate limit exceeded: Too many requests. Please wait and try again.";
-        statusCode = 429; // Too Many Requests
-      } else {
-        errorMessage = `Extraction failed: ${error.message}`;
-      }
-    }
-    
-    return NextResponse.json({ error: errorMessage }, { status: statusCode });
+    return NextResponse.json({ error: "Extraction failed" }, { status: 500 });
   }
 } 

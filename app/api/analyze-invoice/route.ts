@@ -1,143 +1,154 @@
-import { google } from '@ai-sdk/google';
-import { generateObject } from 'ai';
-import { z } from 'zod';
-import { NextRequest, NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use server";
 
-const suggestedFieldsSchema = z.object({
-  headerFields: z.array(z.object({
-    name: z.string().describe('Field name in camelCase (e.g., invoiceNumber)'),
-    label: z.string().describe('Human readable label (e.g., Invoice Number)'),
-    type: z.enum(['string', 'number', 'date']).describe('Data type of the field'),
-    description: z.string().describe('Brief description of what this field contains'),
-    required: z.boolean().describe('Whether this field is typically required'),
-    example: z.string().optional().describe('Example value if visible in document')
-  })).describe('Fields representing high-level invoice header information'),
-  lineItemFields: z.array(z.object({
-    name: z.string().describe('Field name in camelCase (e.g., invoiceNumber)'),
-    label: z.string().describe('Human readable label (e.g., Invoice Number)'),
-    type: z.enum(['string', 'number', 'date']).describe('Data type of the field'),
-    description: z.string().describe('Brief description of what this field contains'),
-    required: z.boolean().describe('Whether this field is typically required'),
-    example: z.string().optional().describe('Example value if visible in document')
-  })).describe('Fields representing columns for each line-item row'),
-  documentType: z.string().describe('Type of document detected (e.g., Invoice, Receipt, Purchase Order)'),
-  confidence: z.number().min(0).max(1).describe('Confidence level in the analysis'),
-  notes: z.string().optional().describe('Any additional notes about the document structure')
+// -----------------------------------------------------------------------------
+//  Analyze Invoice Route – Native Google GenAI SDK (Gemini 2.5-flash)
+//
+//  Accepts:
+//    1. multipart/form-data with one or more File objects (field name "files")
+//    2. application/json with { fileUrls: string[] }
+//
+//  Returns structured suggestions for headerFields & lineItemFields using the
+//  Gemini structured-output feature (responseSchema).
+// -----------------------------------------------------------------------------
+
+import { NextRequest, NextResponse } from "next/server";
+import {
+  GoogleGenAI,
+  createPartFromUri,
+  Type,
+  Schema as GenaiSchema,
+} from "@google/genai";
+
+// Instantiate SDK once
+const ai = new GoogleGenAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
 });
+
+// Helper: upload a blob to File API and wait until processed
+const uploadFileAndWait = async (blob: Blob, displayName: string): Promise<{ uri: string; mimeType: string }> => {
+  const file = await ai.files.upload({ file: blob, config: { displayName } });
+  let info = await ai.files.get({ name: file.name as string });
+  while (info.state === "PROCESSING") {
+    await new Promise((r) => setTimeout(r, 3000));
+    info = await ai.files.get({ name: file.name as string });
+  }
+  if (info.state === "FAILED") throw new Error(`File ${displayName} processing failed`);
+  return { uri: info.uri as string, mimeType: info.mimeType as string };
+};
+
+// Static response schema matching SuggestedFields arrays
+const fieldSchema: GenaiSchema = {
+  type: Type.OBJECT,
+  propertyOrdering: ["name", "label", "type", "description", "required", "example"],
+  properties: {
+    name: { type: Type.STRING },
+    label: { type: Type.STRING },
+    type: { type: Type.STRING, enum: ["string", "number", "date"] },
+    description: { type: Type.STRING },
+    required: { type: Type.BOOLEAN },
+    example: { type: Type.STRING, nullable: true },
+  },
+};
+
+const suggestionSchema: GenaiSchema = {
+  type: Type.OBJECT,
+  propertyOrdering: [
+    "headerFields",
+    "lineItemFields",
+    "documentType",
+    "confidence",
+    "notes",
+  ],
+  properties: {
+    headerFields: { type: Type.ARRAY, items: fieldSchema },
+    lineItemFields: { type: Type.ARRAY, items: fieldSchema },
+    documentType: { type: Type.STRING },
+    confidence: { type: Type.NUMBER },
+    notes: { type: Type.STRING, nullable: true },
+  },
+};
 
 export async function POST(request: NextRequest) {
   try {
-    const contentType = request.headers.get('content-type') || '';
-    
-    const filesData: Array<{ data: ArrayBuffer; mimeType: string; filename?: string }> = [];
-    let fileUrls: string[] = [];
+    const contentType = request.headers.get("content-type") || "";
 
-    if (contentType.includes('multipart/form-data')) {
-      // Handle multiple file uploads via FormData
+    interface UploadedFile { uri: string; mimeType: string }
+    const uploaded: UploadedFile[] = [];
+
+    // ---------------------------------------------------------
+    // Handle input (multipart vs JSON URLs)
+    // ---------------------------------------------------------
+    if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
-      const files = formData.getAll('files') as File[];
-      
-      if (!files || files.length === 0) {
-        return NextResponse.json({ error: 'No files provided' }, { status: 400 });
+      const files = formData.getAll("files") as File[];
+      if (!files.length) {
+        return NextResponse.json({ error: "No files provided" }, { status: 400 });
       }
-
-      // Process each file
-      for (const file of files) {
-        // Validate file type
-        if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-          return NextResponse.json({ 
-            error: `File "${file.name}" is not supported. Only image files (PNG, JPG, etc.) and PDF files are supported.` 
-          }, { status: 400 });
-        }
-
-        const fileData = await file.arrayBuffer();
-        filesData.push({
-          data: fileData,
-          mimeType: file.type,
-          filename: file.name
-        });
+      for (const f of files) {
+        const blob = new Blob([await f.arrayBuffer()], { type: f.type });
+        const info = await uploadFileAndWait(blob, f.name);
+        uploaded.push(info);
       }
     } else {
-      // Handle URL-based files (backward compatibility)
-      const { fileUrls: urls } = await request.json();
-      
-      if (!urls || !Array.isArray(urls) || urls.length === 0) {
-        return NextResponse.json({ error: 'Files or fileUrls are required' }, { status: 400 });
+      const body = await request.json();
+      const urls: string[] = body.fileUrls;
+      if (!Array.isArray(urls) || urls.length === 0) {
+        return NextResponse.json({ error: "fileUrls must be a non-empty array" }, { status: 400 });
       }
-      
-      fileUrls = urls;
+      for (let i = 0; i < urls.length; i += 1) {
+        const u = urls[i];
+        const resp = await fetch(u);
+        if (!resp.ok) throw new Error(`Failed to fetch ${u}`);
+        const buf = await resp.arrayBuffer();
+        const mime = resp.headers.get("content-type") || "application/pdf";
+        const blob = new Blob([buf], { type: mime });
+        const info = await uploadFileAndWait(blob, `remote-${i + 1}`);
+        uploaded.push(info);
+      }
     }
 
-    // Prepare the content for the AI model
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const messageContent: Array<any> = [
-      {
-        type: 'text',
-        text: `Analyze ${filesData.length > 0 ? filesData.length : fileUrls.length} document${filesData.length > 1 || fileUrls.length > 1 ? 's' : ''} and suggest the most relevant fields for an invoice extraction workflow.
+    const docCount = uploaded.length;
 
-        Separate your suggestions into **two groups**:
+    // ---------------------------------------------------------
+    // Build prompt & contents
+    // ---------------------------------------------------------
+    const promptText = `Analyze ${docCount} document${docCount !== 1 ? "s" : ""} and suggest the most relevant fields for an invoice extraction workflow.
 
-        1. Invoice Header Fields – single-value attributes that appear once per invoice (e.g. invoiceNumber, invoiceDate, supplierName, totalAmount).
-        2. Invoice Line-Item Fields – columns that repeat for each line-item row in the invoice table (e.g. itemDescription, quantity, unitPrice, lineTotal).
+Separate your suggestions into TWO groups:
+1. Invoice Header Fields – single-value attributes that appear once per invoice (e.g., invoiceNumber, invoiceDate, supplierName, totalAmount).
+2. Invoice Line-Item Fields – columns that repeat for each line-item row (e.g., itemDescription, quantity, unitPrice, lineTotal).
 
-        Return your response using exactly the JSON schema provided (headerFields and lineItemFields arrays). Each field object must include \"name\", \"label\", \"type\", \"description\", \"required\", and optional \"example\" properties.
+Return JSON that matches the provided response schema exactly.`;
 
-        When analyzing multiple documents, focus on the common denominators – propose a single shared header and line-item schema that works across all of them.`
-      }
-    ];
+    const contents: any[] = [promptText];
+    uploaded.forEach((f) => contents.push(createPartFromUri(f.uri, f.mimeType)));
 
-    // Add file parts based on input type
-    if (filesData.length > 0) {
-      // Add each uploaded file
-      filesData.forEach((file, index) => {
-        messageContent.push({
-          type: 'file',
-          data: file.data,
-          mimeType: file.mimeType,
-          filename: file.filename || `document-${index + 1}`
-        });
-      });
-    } else if (fileUrls.length > 0) {
-      // Add each URL-based file
-      fileUrls.forEach((url, index) => {
-        const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)(\?|$)/i.test(url);
-        if (isImage) {
-          messageContent.push({
-            type: 'image',
-            image: new URL(url)
-          });
-        } else {
-          messageContent.push({
-            type: 'file',
-            data: new URL(url),
-            mimeType: 'application/pdf',
-            filename: `document-${index + 1}`
-          });
-        }
-      });
-    }
-
-    const { object: analysis } = await generateObject({
-      model: google('gemini-2.5-flash'),
-      messages: [
-        {
-          role: 'user',
-          content: messageContent,
-        },
-      ],
-      schema: suggestedFieldsSchema,
-      temperature: 0.0,
+    // ---------------------------------------------------------
+    // Call Gemini with structured output
+    // ---------------------------------------------------------
+    const res = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: suggestionSchema,
+      },
     });
+
+    let analysis: any;
+    try {
+      analysis = JSON.parse(res.text as string);
+    } catch {
+      analysis = res.text;
+    }
 
     return NextResponse.json({
       ...analysis,
-      filesAnalyzed: filesData.length > 0 ? filesData.length : fileUrls.length
+      filesAnalyzed: docCount,
     });
-  } catch (error) {
-    console.error('Error analyzing documents:', error);
-    return NextResponse.json(
-      { error: 'Failed to analyze documents' },
-      { status: 500 }
-    );
+  } catch (err) {
+    console.error("Error analyzing documents:", err);
+    return NextResponse.json({ error: "Failed to analyze documents" }, { status: 500 });
   }
 } 

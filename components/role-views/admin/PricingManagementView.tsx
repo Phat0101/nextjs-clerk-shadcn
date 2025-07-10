@@ -109,11 +109,11 @@ export default function PricingManagementView() {
 
       {/* Create New Price Unit Form */}
       {isCreating && (
-        <Card>
-          <CardHeader>
+        <Card className="p-0">
+          <CardHeader className="p-0">
             <CardTitle>Create New Price Unit</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <form action={handleCreateUnit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -182,8 +182,8 @@ export default function PricingManagementView() {
       {/* Price Units List */}
       <div className="space-y-4">
         {priceUnits.map((unit) => (
-          <Card key={unit._id}>
-            <CardContent className="p-6">
+          <Card key={unit._id} className="p-0">
+            <CardContent className="p-0">
               {editingUnit === unit._id ? (
                 <form action={(formData) => handleUpdateUnit(formData, unit._id)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

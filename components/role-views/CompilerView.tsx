@@ -77,56 +77,44 @@ export default function CompilerView({ currentView, onViewChange }: CompilerView
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Table */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Available Jobs</CardTitle>
-              <p className="text-xs text-gray-500">No template found</p>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{stats.availableJobs}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Review Jobs</CardTitle>
-              <p className="text-xs text-gray-500">AI extracted</p>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-600">
-                {reviewJobs?.length || 0}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Active Jobs</CardTitle>
-              <p className="text-xs text-gray-500">In progress</p>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{stats.activeJobs}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Completed</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{stats.completedJobs}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Earned</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-700">
-                ${((stats.totalEarned || 0) / 100).toFixed(2)}
-              </div>
-            </CardContent>
-          </Card>
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Available Jobs</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Review Jobs</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Active Jobs</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Completed</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Total Earned</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-gray-200">
+                <td className="px-4 py-4">
+                  <div className="text-2xl font-bold text-blue-600">{stats.availableJobs}</div>
+                  <p className="text-xs text-gray-500 mt-1">No template found</p>
+                </td>
+                <td className="px-4 py-4">
+                  <div className="text-2xl font-bold text-purple-600">{reviewJobs?.length || 0}</div>
+                  <p className="text-xs text-gray-500 mt-1">AI extracted</p>
+                </td>
+                <td className="px-4 py-4">
+                  <div className="text-2xl font-bold text-orange-600">{stats.activeJobs}</div>
+                  <p className="text-xs text-gray-500 mt-1">In progress</p>
+                </td>
+                <td className="px-4 py-4">
+                  <div className="text-2xl font-bold text-green-600">{stats.completedJobs}</div>
+                </td>
+                <td className="px-4 py-4">
+                  <div className="text-2xl font-bold text-green-700">
+                    ${((stats.totalEarned || 0) / 100).toFixed(2)}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       )}
 

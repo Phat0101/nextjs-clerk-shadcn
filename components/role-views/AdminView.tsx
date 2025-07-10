@@ -8,13 +8,13 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Users, 
-  FileText, 
-  BarChart3, 
-  DollarSign, 
-  Mail, 
-  TrendingUp, 
+import {
+  Users,
+  FileText,
+  BarChart3,
+  DollarSign,
+  Mail,
+  TrendingUp,
   Clock,
   CheckCircle,
   AlertCircle,
@@ -90,334 +90,208 @@ export default function AdminView({ currentView, onViewChange }: AdminViewProps)
   const adminUsers = allUsers.filter(user => user.role === "ADMIN");
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 space-y-4">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-2">Admin Dashboard</h1>
-        <p className="text-gray-600">Monitor and manage the OBO platform</p>
+      <div className="mb-4">
+        <h1 className="text-xl font-semibold text-gray-900 mb-1">Admin Dashboard</h1>
+        <p className="text-sm text-gray-600">Monitor and manage the OBO platform</p>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        <Card className="hover:shadow-md transition-shadow duration-200">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Jobs</CardTitle>
-              <FileText className="w-4 h-4 text-gray-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-semibold text-gray-900 mb-1">
-              {stats?.totalJobs || 0}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <span className="flex items-center gap-1">
-                <CheckCircle className="w-3 h-3 text-green-500" />
-                {stats?.completedJobs || 0} completed
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3 text-blue-500" />
-                {stats?.inProgressJobs || 0} active
-              </span>
-              <span className="flex items-center gap-1">
-                <AlertCircle className="w-3 h-3 text-orange-500" />
-                {stats?.pendingJobs || 0} pending
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow duration-200">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-gray-600">Platform Users</CardTitle>
-              <Users className="w-4 h-4 text-gray-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-semibold text-gray-900 mb-1">
-              {stats?.totalUsers || 0}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <span>{clientUsers.length} clients</span>
-              <span>•</span>
-              <span>{compilerUsers.length} compilers</span>
-              <span>•</span>
-              <span>{adminUsers.length} admins</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow duration-200">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-gray-600">Active Clients</CardTitle>
-              <Building2 className="w-4 h-4 text-gray-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-semibold text-gray-900 mb-1">
-              {stats?.totalClients || 0}
-            </div>
-            <div className="text-xs text-gray-600">
-              Organizations using the platform
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow duration-200">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-gray-600">Avg Job Value</CardTitle>
-              <DollarSign className="w-4 h-4 text-gray-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-semibold text-gray-900 mb-1">
-              ${((stats?.averageJobValue || 0) / 100).toFixed(2)}
-            </div>
-            <div className="text-xs text-gray-600">
-              Average value per completed job
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Revenue Breakdown */}
-      {stats?.completedJobs && stats.completedJobs > 0 && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-medium text-gray-900">Revenue Overview</h2>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <TrendingUp className="w-4 h-4" />
-              Based on {stats.completedJobs} completed jobs
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-            <Card className="hover:shadow-md transition-shadow duration-200">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600">Gross Revenue</CardTitle>
-                <p className="text-xs text-gray-500">Total client payments</p>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-2xl font-semibold text-blue-600">
-                  ${((stats?.grossRevenue || 0) / 100).toFixed(2)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow duration-200">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600">Company Revenue</CardTitle>
-                <p className="text-xs text-gray-500">After {stats?.companyCommission}% commission</p>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-2xl font-semibold text-green-600">
-                  ${((stats?.companyRevenue || 0) / 100).toFixed(2)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow duration-200">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600">Compiler Revenue</CardTitle>
-                <p className="text-xs text-gray-500">Paid to compilers ({stats?.compilerCommission}%)</p>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-2xl font-semibold text-purple-600">
-                  ${((stats?.compilerRevenue || 0) / 100).toFixed(2)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="hover:shadow-md transition-shadow duration-200">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-gray-600">Avg Company Revenue</CardTitle>
-                <p className="text-xs text-gray-500">Per completed job</p>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-2xl font-semibold text-green-600">
-                  ${((stats?.averageCompanyRevenue || 0) / 100).toFixed(2)}
-                </div>
-              </CardContent>
-            </Card>
+      {/* Platform Overview and Revenue Analytics */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <h2 className="text-base font-medium text-gray-900 mb-0">Platform Overview</h2>
+          <div className="overflow-hidden border border-gray-200 rounded-lg">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                <tr>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <FileText className="w-4 h-4 text-gray-500 mr-2" />
+                      <span className="text-xs font-medium text-gray-900">Total Jobs</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="text-lg font-semibold text-gray-900">{stats?.totalJobs || 0}</span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <CheckCircle className="w-2.5 h-2.5 text-green-500" />
+                        {stats?.completedJobs || 0} completed
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5 text-blue-500" />
+                        {stats?.inProgressJobs || 0} active
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <AlertCircle className="w-2.5 h-2.5 text-orange-500" />
+                        {stats?.pendingJobs || 0} pending
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <Users className="w-4 h-4 text-gray-500 mr-2" />
+                      <span className="text-xs font-medium text-gray-900">Platform Users</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="text-lg font-semibold text-gray-900">{stats?.totalUsers || 0}</span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <span>{clientUsers.length} clients</span>
+                      <span>•</span>
+                      <span>{compilerUsers.length} compilers</span>
+                      <span>•</span>
+                      <span>{adminUsers.length} admins</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <Building2 className="w-4 h-4 text-gray-500 mr-2" />
+                      <span className="text-xs font-medium text-gray-900">Active Clients</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="text-lg font-semibold text-gray-900">{stats?.totalClients || 0}</span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="text-xs text-gray-600">Organizations using the platform</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <DollarSign className="w-4 h-4 text-gray-500 mr-2" />
+                      <span className="text-xs font-medium text-gray-900">Avg Job Value</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="text-lg font-semibold text-gray-900">${((stats?.averageJobValue || 0) / 100).toFixed(2)}</span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="text-xs text-gray-600">Average value per completed job</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
 
-      {/* Management Actions */}
-      <div className="space-y-6">
-        <h2 className="text-lg font-medium text-gray-900">Management Tools</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-all duration-200 hover:border-blue-300 group" 
-            onClick={() => onViewChange("users")}
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-3 text-base font-medium text-gray-900 group-hover:text-blue-700">
-                <div className="p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100">
-                  <Users className="w-5 h-5 text-blue-600" />
+        {/* Revenue Analytics */}
+        <div className="space-y-2">
+          {stats?.completedJobs && stats.completedJobs > 0 && (
+            <div>
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-medium text-gray-900">Revenue Analytics</h2>
+                <div className="flex items-center gap-1 text-xs text-gray-600">
+                  <TrendingUp className="w-3 h-3" />
+                  Based on {stats.completedJobs} completed jobs
                 </div>
-                User Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-sm text-gray-600 mb-3">
-                Manage user roles and permissions across the platform
-              </p>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>{clientUsers.length} clients</span>
-                <span>•</span>
-                <span>{compilerUsers.length} compilers</span>
-                <span>•</span>
-                <span>{adminUsers.length} admins</span>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-all duration-200 hover:border-blue-300 group" 
-            onClick={() => onViewChange("all-jobs")}
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-3 text-base font-medium text-gray-900 group-hover:text-blue-700">
-                <div className="p-2 bg-green-50 rounded-lg group-hover:bg-green-100">
-                  <FileText className="w-5 h-5 text-green-600" />
-                </div>
-                Job Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-sm text-gray-600 mb-3">
-                View and manage all jobs across the platform
-              </p>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>{stats?.totalJobs || 0} total jobs</span>
-                <span>•</span>
-                <span>{stats?.completedJobs || 0} completed</span>
+              
+              <div className="overflow-hidden border border-gray-200 rounded-lg">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue Type</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    <tr>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-xs font-medium text-gray-900">Gross Revenue</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-lg font-semibold text-blue-600">${((stats?.grossRevenue || 0) / 100).toFixed(2)}</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-xs text-gray-600">Total client payments</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-xs font-medium text-gray-900">Company Revenue</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-lg font-semibold text-green-600">${((stats?.companyRevenue || 0) / 100).toFixed(2)}</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-xs text-gray-600">After {stats?.companyCommission}% commission</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-xs font-medium text-gray-900">Compiler Revenue</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-lg font-semibold text-purple-600">${((stats?.compilerRevenue || 0) / 100).toFixed(2)}</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-xs text-gray-600">Paid to compilers ({stats?.compilerCommission}%)</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-xs font-medium text-gray-900">Avg Company Revenue</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-lg font-semibold text-green-600">${((stats?.averageCompanyRevenue || 0) / 100).toFixed(2)}</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="text-xs text-gray-600">Per completed job</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-all duration-200 hover:border-blue-300 group" 
-            onClick={() => onViewChange("pricing")}
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-3 text-base font-medium text-gray-900 group-hover:text-blue-700">
-                <div className="p-2 bg-purple-50 rounded-lg group-hover:bg-purple-100">
-                  <DollarSign className="w-5 h-5 text-purple-600" />
-                </div>
-                Pricing Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-sm text-gray-600 mb-3">
-                Configure pricing units and job rates
-              </p>
-              <div className="text-xs text-gray-500">
-                Set competitive pricing for different job types
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-all duration-200 hover:border-blue-300 group" 
-            onClick={() => onViewChange("commission-settings")}
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-3 text-base font-medium text-gray-900 group-hover:text-blue-700">
-                <div className="p-2 bg-orange-50 rounded-lg group-hover:bg-orange-100">
-                  <BarChart3 className="w-5 h-5 text-orange-600" />
-                </div>
-                Commission Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-sm text-gray-600 mb-3">
-                Configure revenue sharing between platform and compilers
-              </p>
-              <div className="text-xs text-gray-500">
-                Current: {stats?.compilerCommission}% compiler, {stats?.companyCommission}% company
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-all duration-200 hover:border-blue-300 group" 
-            onClick={() => onViewChange("processing-settings")}
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-3 text-base font-medium text-gray-900 group-hover:text-blue-700">
-                <div className="p-2 bg-indigo-50 rounded-lg group-hover:bg-indigo-100">
-                  <BarChart3 className="w-5 h-5 text-indigo-600" />
-                </div>
-                Processing Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-sm text-gray-600 mb-3">
-                Configure automated job processing behavior
-              </p>
-              <div className="text-xs text-gray-500">
-                AI processing, templates, and workflow automation
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className="cursor-pointer hover:shadow-md transition-all duration-200 hover:border-blue-300 group" 
-            onClick={() => onViewChange("inbox")}
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-3 text-base font-medium text-gray-900 group-hover:text-blue-700">
-                <div className="p-2 bg-teal-50 rounded-lg group-hover:bg-teal-100">
-                  <Mail className="w-5 h-5 text-teal-600" />
-                </div>
-                Inbox Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-sm text-gray-600 mb-3">
-                Monitor email processing and job creation
-              </p>
-              <div className="text-xs text-gray-500">
-                Email-to-job conversion and communication tracking
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Recent Activity */}
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium text-gray-900">Recent Users</h2>
+          <h2 className="text-base font-medium text-gray-900">Recent Users</h2>
           <Button 
             variant="outline" 
             onClick={() => onViewChange("users")}
-            className="text-sm"
+            className="text-xs h-7"
           >
             View All Users
           </Button>
         </div>
 
-        <Card>
+        <Card className="p-0">
           <CardContent className="p-0">
             <div className="divide-y divide-gray-200">
               {allUsers.slice(0, 5).map((user, index) => (
-                <div key={user._id} className="p-4 hover:bg-gray-50 transition-colors">
+                <div key={user._id} className="p-3 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
                         <span className="text-xs font-medium text-gray-600">
                           {user.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <div>
-                        <h3 className="font-medium text-sm text-gray-900">{user.name}</h3>
+                        <h3 className="font-medium text-xs text-gray-900">{user.name}</h3>
                         <p className="text-xs text-gray-500">{user.email}</p>
                       </div>
                     </div>

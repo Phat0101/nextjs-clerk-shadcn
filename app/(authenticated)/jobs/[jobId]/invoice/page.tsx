@@ -53,11 +53,11 @@ async function sendCompletionEmailIfNeeded(jobId: string, csvStorageId: string, 
   try {
     console.log('🔍 Checking completion email for job:', jobId);
     console.log('📧 Linked email provided:', linkedEmail ? 'Found' : 'Not found');
-    
+
     if (linkedEmail) {
       console.log('📧 Email details:', { from: linkedEmail.from, subject: linkedEmail.subject });
       console.log('✅ Job is linked to inbox email, sending completion email to:', linkedEmail.from);
-      
+
       // Send completion email
       const emailResponse = await fetch('/api/send-completion-email', {
         method: 'POST',
@@ -72,7 +72,7 @@ async function sendCompletionEmailIfNeeded(jobId: string, csvStorageId: string, 
           jobTitle: jobTitle || `Job ${jobId}`,
         }),
       });
-      
+
       if (emailResponse.ok) {
         const emailResult = await emailResponse.json();
         console.log('✅ Completion email sent successfully:', emailResult);
@@ -112,6 +112,9 @@ export default function JobInvoicePage(props: any) {
 
   // Tab selection for Confirm Fields UI (header vs line items)
   const [fieldsTab, setFieldsTab] = useState<"header" | "line">("header");
+
+  // Manual analyze fallback state
+  const [manualAnalyzing, setManualAnalyzing] = useState(false);
 
   // Add-field UI state
   const [showAddHeader, setShowAddHeader] = useState(false);
@@ -657,8 +660,6 @@ export default function JobInvoicePage(props: any) {
     });
   };
 
-
-
   const handleSaveTemplate = async () => {
     let sup = supplierName;
     if (!sup) {
@@ -779,6 +780,48 @@ export default function JobInvoicePage(props: any) {
     }
   };
 
+  // Manual trigger to analyze invoice and fetch suggested fields
+  const triggerManualAnalyze = async () => {
+    if (!displayFiles.length) return;
+    setManualAnalyzing(true);
+    setCurrentStep("analyzing");
+    setError(null);
+    try {
+      const fileUrls = displayFiles.map((f) => f.fileUrl).filter(Boolean) as string[];
+      const response = await fetch("/api/analyze-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileUrls }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to analyze invoice");
+      }
+
+      const result = await response.json();
+
+      if (result?.headerFields && result?.lineItemFields) {
+        const analysis: AnalysisResult = {
+          headerFields: result.headerFields,
+          lineItemFields: result.lineItemFields,
+          documentType: result.documentType || "Invoice",
+          confidence: result.confidence || 1,
+          notes: result.notes,
+        };
+        setAnalysisResult(analysis);
+        setConfirmedFields([...analysis.headerFields, ...analysis.lineItemFields]);
+        setCurrentStep("confirming");
+      } else {
+        throw new Error("Invalid response from analyzer");
+      }
+    } catch (err) {
+      console.error("Manual analyze failed", err);
+      setError(err instanceof Error ? err.message : "Manual analysis failed");
+    } finally {
+      setManualAnalyzing(false);
+    }
+  };
+
   if (jobDetails === undefined) {
     return (
       <div className="p-6 flex items-center justify-center">
@@ -891,12 +934,30 @@ export default function JobInvoicePage(props: any) {
             </div>
           )}
 
+          {/* Manual Analyze button – show only when no analysis results */}
+          {!(analysisResult || (jobDetails?.job.analysisResult && jobDetails?.job.extractedData)) && (
+            <div className="flex justify-end px-3 py-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-5"
+                onClick={triggerManualAnalyze}
+                disabled={!displayFiles.length || manualAnalyzing}
+              >
+                {manualAnalyzing ? "Analyzing…" : "Manual Suggest"}
+              </Button>
+            </div>
+          )}
+
           {/* ANALYZING */}
           {currentStep === "analyzing" && (
-            <div className="p-4 flex flex-col items-center gap-1 text-center">
+            <div className="p-4 flex flex-col items-center gap-2 text-center">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               <h3 className="text-md font-semibold">Analyzing Document{displayFiles.length > 1 ? "s" : ""}</h3>
               <p className="text-xs text-muted-foreground">AI is suggesting fields for extraction…</p>
+              {error && (
+                <p className="text-xs text-red-600 mt-1 max-w-sm">{error}</p>
+              )}
             </div>
           )}
 
