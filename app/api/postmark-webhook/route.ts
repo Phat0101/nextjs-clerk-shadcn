@@ -183,33 +183,38 @@ export async function POST(request: NextRequest) {
       jobId,
     });
 
-    // Trigger auto-processing based on job type
-    if (jobType === 'INVOICE') {
-      // Trigger invoice auto-processing
-      try {
-         const response = await fetch(new URL("/api/agent/invoice/auto", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").toString(), {
-            method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jobId }),
-        });
-        
-        if (response.ok) {
-          console.log('Auto-processing triggered for invoice job:', jobId);
-        } else {
-          console.warn('Auto-processing failed for invoice job:', jobId);
-        }
-      } catch (error) {
-        console.error('Error triggering auto-processing:', error);
-      }
-    }
-
-    return NextResponse.json({ 
+    // Return success immediately to Postmark to prevent timeout
+    const response = NextResponse.json({ 
       success: true, 
       jobId,
       jobType,
       attachmentCount: uploadedFiles.length,
       message: `Created ${jobType} job from email`
     });
+
+    // Trigger auto-processing asynchronously (don't await)
+    if (jobType === 'INVOICE') {
+      // Fire and forget - don't block the webhook response
+      setImmediate(async () => {
+        try {
+          const autoProcessResponse = await fetch(new URL("/api/agent/invoice/auto", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId }),
+          });
+          
+          if (autoProcessResponse.ok) {
+            console.log('Auto-processing triggered for invoice job:', jobId);
+          } else {
+            console.warn('Auto-processing failed for invoice job:', jobId);
+          }
+        } catch (error) {
+          console.error('Error triggering auto-processing:', error);
+        }
+      });
+    }
+
+    return response;
 
   } catch (error) {
     console.error('Webhook processing error:', error);
