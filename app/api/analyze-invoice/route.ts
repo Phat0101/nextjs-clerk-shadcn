@@ -128,7 +128,7 @@ Return JSON that matches the provided response schema exactly.`;
     // Call Gemini with structured output
     // ---------------------------------------------------------
     const res = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-pro",
       contents,
       config: {
         responseMimeType: "application/json",
