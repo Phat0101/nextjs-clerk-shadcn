@@ -93,7 +93,7 @@ export default function CompilerView({ currentView, onViewChange }: CompilerView
             <tbody>
               <tr className="border-t border-gray-200">
                 <td className="px-4 py-4">
-                  <div className="text-2xl font-bold text-blue-600">{stats.availableJobs}</div>
+              <div className="text-2xl font-bold text-blue-600">{stats.availableJobs}</div>
                   <p className="text-xs text-gray-500 mt-1">No template found</p>
                 </td>
                 <td className="px-4 py-4">
@@ -101,16 +101,16 @@ export default function CompilerView({ currentView, onViewChange }: CompilerView
                   <p className="text-xs text-gray-500 mt-1">AI extracted</p>
                 </td>
                 <td className="px-4 py-4">
-                  <div className="text-2xl font-bold text-orange-600">{stats.activeJobs}</div>
+              <div className="text-2xl font-bold text-orange-600">{stats.activeJobs}</div>
                   <p className="text-xs text-gray-500 mt-1">In progress</p>
                 </td>
                 <td className="px-4 py-4">
-                  <div className="text-2xl font-bold text-green-600">{stats.completedJobs}</div>
+              <div className="text-2xl font-bold text-green-600">{stats.completedJobs}</div>
                 </td>
                 <td className="px-4 py-4">
-                  <div className="text-2xl font-bold text-green-700">
-                    ${((stats.totalEarned || 0) / 100).toFixed(2)}
-                  </div>
+              <div className="text-2xl font-bold text-green-700">
+                ${((stats.totalEarned || 0) / 100).toFixed(2)}
+              </div>
                 </td>
               </tr>
             </tbody>

@@ -53,11 +53,11 @@ async function sendCompletionEmailIfNeeded(jobId: string, csvStorageId: string, 
   try {
     console.log('🔍 Checking completion email for job:', jobId);
     console.log('📧 Linked email provided:', linkedEmail ? 'Found' : 'Not found');
-
+    
     if (linkedEmail) {
       console.log('📧 Email details:', { from: linkedEmail.from, subject: linkedEmail.subject });
       console.log('✅ Job is linked to inbox email, sending completion email to:', linkedEmail.from);
-
+      
       // Send completion email
       const emailResponse = await fetch('/api/send-completion-email', {
         method: 'POST',
@@ -72,7 +72,7 @@ async function sendCompletionEmailIfNeeded(jobId: string, csvStorageId: string, 
           jobTitle: jobTitle || `Job ${jobId}`,
         }),
       });
-
+      
       if (emailResponse.ok) {
         const emailResult = await emailResponse.json();
         console.log('✅ Completion email sent successfully:', emailResult);

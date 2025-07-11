@@ -196,21 +196,21 @@ export async function POST(request: NextRequest) {
     if (jobType === 'INVOICE') {
       // Fire and forget - don't block the webhook response
       setImmediate(async () => {
-        try {
+      try {
           const autoProcessResponse = await fetch(new URL("/api/agent/invoice/auto", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").toString(), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId }),
-          });
-          
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId }),
+        });
+        
           if (autoProcessResponse.ok) {
-            console.log('Auto-processing triggered for invoice job:', jobId);
-          } else {
-            console.warn('Auto-processing failed for invoice job:', jobId);
-          }
-        } catch (error) {
-          console.error('Error triggering auto-processing:', error);
+          console.log('Auto-processing triggered for invoice job:', jobId);
+        } else {
+          console.warn('Auto-processing failed for invoice job:', jobId);
         }
+      } catch (error) {
+        console.error('Error triggering auto-processing:', error);
+      }
       });
     }
 
