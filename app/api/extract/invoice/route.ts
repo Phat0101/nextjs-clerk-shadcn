@@ -32,6 +32,9 @@ interface ConfirmedField {
 // Initialise the SDK once (cold-start friendly)
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
+  httpOptions: {
+    timeout: 10 * 60 * 1000,
+  },
 });
 
 // Helper – convert our ConfirmedField list into a Gemini JSON schema fragment
@@ -242,7 +245,7 @@ Return JSON matching the provided response schema with the complete \`lineItems\
           responseMimeType: "application/json",
           responseSchema: dynamicSchema,
           thinkingConfig: {
-            thinkingBudget: 2000, 
+            thinkingBudget: 20000, 
             includeThoughts: true, // Disable to reduce response time
           },
           temperature: 0.0,
