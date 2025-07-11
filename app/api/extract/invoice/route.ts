@@ -242,7 +242,7 @@ Return JSON matching the provided response schema with the complete \`lineItems\
           responseMimeType: "application/json",
           responseSchema: dynamicSchema,
           thinkingConfig: {
-            thinkingBudget: 30000, 
+            thinkingBudget: 2000, 
             includeThoughts: true, // Disable to reduce response time
           },
           temperature: 0.0,

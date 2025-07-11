@@ -133,6 +133,9 @@ Return JSON that matches the provided response schema exactly.`;
       config: {
         responseMimeType: "application/json",
         responseSchema: suggestionSchema,
+        httpOptions: {
+          timeout: 10 * 60 * 1000,
+        },
       },
     });
 
